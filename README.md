@@ -35,6 +35,6 @@ This is a solo project (or small project) made by me (Bucketnight)
 ## Run:
 `make run`
 
---
+---
 ## Clean:
 `make clean`
