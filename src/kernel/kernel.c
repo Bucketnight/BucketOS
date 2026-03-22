@@ -1,12 +1,12 @@
-#include "bucketkernel/interrupts.h"
-#include "bucketkernel/kernel.h"
-#include "bucketkernel/memory.h"
-#include "bucketkernel/multiboot.h"
-#include "bucketkernel/ports.h"
-#include "bucketkernel/print.h"
-#include "bucketkernel/shell.h"
-#include "bucketkernel/terminal.h"
-#include "bucketkernel/hypervisor.h"
+#include "bucketos/interrupts.h"
+#include "bucketos/kernel.h"
+#include "bucketos/memory.h"
+#include "bucketos/multiboot.h"
+#include "bucketos/ports.h"
+#include "bucketos/print.h"
+#include "bucketos/shell.h"
+#include "bucketos/terminal.h"
+#include "bucketos/hypervisor.h"
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     terminal_initialize();
