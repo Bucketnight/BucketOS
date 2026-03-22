@@ -1,6 +1,6 @@
-#include "bucketkernel/keyboard.h"
-#include "bucketkernel/ports.h"
-#include "bucketkernel/shell.h"
+#include "bucketos/keyboard.h"
+#include "bucketos/ports.h"
+#include "bucketos/shell.h"
 
 static const char g_scancode_map[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
