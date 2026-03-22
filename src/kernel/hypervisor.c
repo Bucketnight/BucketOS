@@ -2,10 +2,36 @@
 #include "bucketos/cpuid.h"
 #include "bucketos/string.h"
 
+static const char*hypervisor_name_from_vendor(const char *vendor) {
+    if (strcmp(vendor, "TCGTCGTCGTCG") == 0) {
+        return "QEMU";
+    }
+    if (strcmp(vendor, "KVMKVMKVM") == 0) {
+        return "KVM";
+    }
+    if (strcmp(vendor, "Microsoft Hv") == 0) {
+        return "HyperV";
+    }
+    if (strcmp(vendor, "VMwareVMware") == 0) {
+        return "VMWare"; 
+    }
+    if (strcmp(vendor, "XenVMMXenVMM") == 0) {
+        return "Xen";
+    }
+    if (strcmp(vendor, "VBoxVBoxVBox") == 0) {
+        return "VirtualBox";
+    }
+    if (strcmp(vendor, "prl hyperv") == 0) {
+        return "Parallels";
+    }
+    return "Unknown";
+}
+
 hypervisor_info_t hypervisor_detect(void) {
     hypervisor_info_t info;
     info.present = false;
     info.vendor[0] = '\0';
+    info.name = "Bare metal";
 
     cpuid_result_t leaf1 = cpuid(0x1);
 
@@ -21,5 +47,6 @@ hypervisor_info_t hypervisor_detect(void) {
     ((uint32_t *)info.vendor)[2] = hv.edx;
     info.vendor[12] = '\0';
 
+    info.name = hypervisor_name_from_vendor(info.vendor);
     return info;
 }
