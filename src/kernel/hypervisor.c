@@ -1,5 +1,5 @@
-#include "bucketkernel/hypervisor.h"
-#include "bucketkernel/cpuid.h"
+#include "bucketos/hypervisor.h"
+#include "bucketos/cpuid.h"
 
 hypervisor_info_t hypervisor_detect(void) {
     hypervisor_info_t info;
