@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_STRING_H
 #define BUCKETKERNEL_STRING_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 void *memcpy(void *dest, const void *src, size_t count);
 void *memset(void *dest, int value, size_t count);
