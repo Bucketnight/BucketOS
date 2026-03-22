@@ -1,10 +1,10 @@
-#include "bucketkernel/memory.h"
-#include "bucketkernel/pit.h"
-#include "bucketkernel/ports.h"
-#include "bucketkernel/print.h"
-#include "bucketkernel/shell.h"
-#include "bucketkernel/string.h"
-#include "bucketkernel/terminal.h"
+#include "bucketos/memory.h"
+#include "bucketos/pit.h"
+#include "bucketos/ports.h"
+#include "bucketos/print.h"
+#include "bucketos/shell.h"
+#include "bucketos/string.h"
+#include "bucketos/terminal.h"
 
 enum {
     SHELL_BUFFER_SIZE = 128
