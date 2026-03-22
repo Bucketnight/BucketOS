@@ -1,4 +1,5 @@
 #include "bucketos/memory.h"
+#include "bucketos/panic.h"
 #include "bucketos/pit.h"
 #include "bucketos/ports.h"
 #include "bucketos/print.h"
@@ -69,7 +70,7 @@ static void shell_execute(void) {
     }
 
     if (strcmp(g_buffer, "help") == 0) {
-        print_line("commands: help about clear meminfo ticks shutdown");
+        print_line("commands: help about clear meminfo ticks panic shutdown");
     } else if (strcmp(g_buffer, "about") == 0) {
         print_line("v0.0.1");
     } else if (strcmp(g_buffer, "clear") == 0) {
@@ -80,6 +81,8 @@ static void shell_execute(void) {
         print_string("ticks: ");
         print_uint32(pit_ticks());
         print_line("");
+    } else if (strcmp(g_buffer, "panic") == 0) {
+        panic("panic command requested from shell");
     } else if (strcmp(g_buffer, "shutdown") == 0) {
         print_line("powering off");
 
