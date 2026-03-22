@@ -1,9 +1,9 @@
-#include "bucketkernel/interrupts.h"
-#include "bucketkernel/keyboard.h"
-#include "bucketkernel/pit.h"
-#include "bucketkernel/ports.h"
-#include "bucketkernel/print.h"
-#include "bucketkernel/terminal.h"
+#include "bucketos/interrupts.h"
+#include "bucketos/keyboard.h"
+#include "bucketos/pit.h"
+#include "bucketos/ports.h"
+#include "bucketos/print.h"
+#include "bucketos/terminal.h"
 
 extern void isr0(void);
 extern void isr1(void);
