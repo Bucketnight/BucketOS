@@ -2,7 +2,7 @@
 #ifndef BUCKETKERNEL_CPUID_H
 #define BUCKETKERNEL_CPUID_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 typedef struct {
     uint32_t eax;
