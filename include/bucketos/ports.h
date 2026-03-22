@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_PORTS_H
 #define BUCKETKERNEL_PORTS_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 uint8_t inb(uint16_t port);
 void outb(uint16_t port, uint8_t value);
