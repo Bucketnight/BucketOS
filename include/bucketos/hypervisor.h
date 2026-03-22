@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_HYPERVISOR_H
 #define BUCKETKERNEL_HYPERVISOR_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 typedef struct {
     bool present;
