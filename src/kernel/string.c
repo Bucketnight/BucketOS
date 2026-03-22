@@ -1,4 +1,4 @@
-#include "bucketkernel/string.h"
+#include "bucketos/string.h"
 
 void *memcpy(void *dest, const void *src, size_t count) {
     unsigned char *out = (unsigned char *)dest;
