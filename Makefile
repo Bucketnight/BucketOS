@@ -25,8 +25,10 @@ SOURCES_C := \
 	src/kernel/interrupts.c \
 	src/kernel/pit.c \
 	src/kernel/keyboard.c \
+	src/kernel/hypervisor.c \
 	src/kernel/memory.c \
-	src/kernel/shell.c
+	src/kernel/shell.c \
+
 
 SOURCES_S := \
 	src/arch/x86/boot.s \
