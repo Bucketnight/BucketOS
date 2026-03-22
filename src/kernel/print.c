@@ -1,5 +1,5 @@
-#include "bucketkernel/print.h"
-#include "bucketkernel/terminal.h"
+#include "bucketos/print.h"
+#include "bucketos/terminal.h"
 
 static void print_uint_recursive(uint32_t value) {
     if (value >= 10) {
