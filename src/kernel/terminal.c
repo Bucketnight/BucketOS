@@ -1,5 +1,5 @@
-#include "bucketkernel/terminal.h"
-#include "bucketkernel/ports.h"
+#include "bucketos/terminal.h"
+#include "bucketos/ports.h"
 
 enum {
     VGA_WIDTH = 80,
