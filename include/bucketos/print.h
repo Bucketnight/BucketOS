@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_PRINT_H
 #define BUCKETKERNEL_PRINT_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 void print_char(char c);
 void print_string(const char *text);
