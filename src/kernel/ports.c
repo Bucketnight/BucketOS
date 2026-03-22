@@ -24,6 +24,19 @@ void cpu_halt(void) {
     __asm__ volatile ("hlt");
 }
 
+void cpu_reboot(void) {
+    __asm__ volatile ("cli");
+
+    while ((inb(0x64) & 0x02u) != 0u) {
+    }
+
+    outb(0x64, 0xFE);
+
+    for (;;) {
+        cpu_halt();
+    }
+}
+
 void outw(uint16_t port, uint16_t value) {
     __asm__ volatile ("outw %0, %1" : : "a"(value), "Nd"(port));
 }
