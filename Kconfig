@@ -1,0 +1,27 @@
+mainmenu "BucketOS Kernel Configuration"
+
+config SERIAL_LOG
+    bool "Enable serial logging"
+    default y
+    help
+      Mirror kernel log output to a serial port in addition to VGA text mode.
+
+config PANIC_SERIAL
+    bool "Log panic output to serial"
+    default y
+    depends on SERIAL_LOG
+    help
+      Keep panic messages visible on the serial console even if VGA state is broken.
+
+config PANIC_HALT
+    bool "Halt CPU after panic"
+    default y
+    help
+      Stop execution after a fatal kernel error instead of trying to continue.
+
+config SERIAL_COM1_BASE
+    hex "COM1 base port"
+    default 0x3F8
+    depends on SERIAL_LOG
+    help
+      Standard I/O base for the first serial port on x86 PCs.
