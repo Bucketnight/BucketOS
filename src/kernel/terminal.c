@@ -68,11 +68,13 @@ void terminal_put_char(char c) {
         g_column = 0;
         ++g_row;
         scroll_if_needed();
+        terminal_update_cursor();
         return;
     }
 
     if (c == '\r') {
         g_column = 0;
+        terminal_update_cursor();
         return;
     }
 
@@ -83,10 +85,12 @@ void terminal_put_char(char c) {
             --g_row;
             g_column = VGA_WIDTH - 1;
         } else {
+            terminal_update_cursor();
             return;
         }
 
         g_buffer[g_row * VGA_WIDTH + g_column] = vga_entry(' ', g_color);
+        terminal_update_cursor();
         return;
     }
 
