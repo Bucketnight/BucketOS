@@ -3,21 +3,35 @@
 #include "bucketos/ports.h"
 #include "bucketos/print.h"
 #include "bucketos/terminal.h"
+#include "bucketos/pit.h"
+
+static void panic_delay_ticks(uint32_t ticks_to_wait) {
+    const uint32_t start = pit_ticks();
+
+    while ((pit_ticks() - start) < ticks_to_wait)
+    {
+        __asm__ volatile ("hlt");
+    }
+    
+}
 
 static void panic_stop(void) __attribute__((noreturn));
 
 static void panic_stop(void) {
     __asm__ volatile ("cli");
 
-#if CONFIG_PANIC_HALT
-    for (;;) {
-        cpu_halt();
-    }
-#else
-    for (;;) {
-    }
-#endif
+    terminal_set_color(0x0C);
+    print_line("rebooting in 5 seconds...");
+    terminal_set_color(0x0F);
+
+    __asm__ volatile ("sti");
+    panic_delay_ticks(500);
+    __asm__ volatile ("cli");
+
+    cpu_reboot();
 }
+
+
 
 void panic(const char *message) {
     terminal_set_color(0x0C);
@@ -48,4 +62,3 @@ void panic_exception(const char *message, const registers_t *regs) {
 
     panic_stop();
 }
-
