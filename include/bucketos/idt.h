@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_IDT_H
 #define BUCKETKERNEL_IDT_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 typedef struct {
     uint32_t gs;
