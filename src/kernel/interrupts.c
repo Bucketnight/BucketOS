@@ -1,5 +1,6 @@
 #include "bucketos/interrupts.h"
 #include "bucketos/keyboard.h"
+#include "bucketos/panic.h"
 #include "bucketos/pit.h"
 #include "bucketos/ports.h"
 #include "bucketos/print.h"
@@ -154,20 +155,7 @@ void interrupts_initialize(void) {
 
 void interrupt_dispatch(registers_t *regs) {
     if (regs->int_no < 32) {
-        terminal_set_color(0x0C);
-        print_string("exception: ");
-        print_string(g_exception_names[regs->int_no]);
-        print_string(" int=");
-        print_uint32(regs->int_no);
-        print_string(" err=");
-        print_hex32(regs->err_code);
-        print_line("");
-        terminal_set_color(0x0F);
-
-        __asm__ volatile ("cli");
-        for (;;) {
-            cpu_halt();
-        }
+        panic_exception(g_exception_names[regs->int_no], regs);
     }
 
     switch (regs->int_no) {
