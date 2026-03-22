@@ -1,8 +1,8 @@
 #ifndef BUCKETKERNEL_MEMORY_H
 #define BUCKETKERNEL_MEMORY_H
 
-#include "bucketkernel/common.h"
-#include "bucketkernel/multiboot.h"
+#include "bucketos/common.h"
+#include "bucketos/multiboot.h"
 
 #define MEMORY_REGION_MAX 32
 
