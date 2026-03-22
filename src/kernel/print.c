@@ -1,23 +1,28 @@
 #include "bucketos/print.h"
+#include "bucketos/serial.h"
 #include "bucketos/terminal.h"
 
 static void print_uint_recursive(uint32_t value) {
     if (value >= 10) {
         print_uint_recursive(value / 10);
     }
-    terminal_put_char((char)('0' + (value % 10)));
+    print_char((char)('0' + (value % 10)));
 }
 
 void print_char(char c) {
     terminal_put_char(c);
+    serial_write_char(c);
 }
 
 void print_string(const char *text) {
-    terminal_write(text);
+    while (*text != '\0') {
+        print_char(*text++);
+    }
 }
 
 void print_line(const char *text) {
-    terminal_write_line(text);
+    print_string(text);
+    print_char('\n');
 }
 
 void print_uint32(uint32_t value) {
@@ -28,7 +33,7 @@ void print_hex32(uint32_t value) {
 
     print_string("0x");
     for (int shift = 28; shift >= 0; shift -= 4) {
-        terminal_put_char(digits[(value >> shift) & 0xFu]);
+        print_char(digits[(value >> shift) & 0xFu]);
     }
 }
 
@@ -37,7 +42,7 @@ void print_hex64(uint64_t value) {
 
     print_string("0x");
     for (int shift = 60; shift >= 0; shift -= 4) {
-        terminal_put_char(digits[(value >> shift) & 0xFu]);
+        print_char(digits[(value >> shift) & 0xFu]);
     }
 }
 
