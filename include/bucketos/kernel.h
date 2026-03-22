@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_KERNEL_H
 #define BUCKETKERNEL_KERNEL_H
 
-#include "bucketos/common.h"
+#include "buckets/common.h"
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr);
 
