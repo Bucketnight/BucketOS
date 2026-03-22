@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_TERMINAL_H
 #define BUCKETKERNEL_TERMINAL_H
 
-#include "bucketOS/common.h"
+#include "bucketos/common.h"
 
 void terminal_initialize(void);
 void terminal_clear(void);
