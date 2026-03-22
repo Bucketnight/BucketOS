@@ -1,6 +1,6 @@
-#include "bucketkernel/idt.h"
-#include "bucketkernel/ports.h"
-#include "bucketkernel/string.h"
+#include "bucketos/idt.h"
+#include "bucketos/ports.h"
+#include "bucketos/string.h"
 
 typedef struct {
     uint16_t base_low;
