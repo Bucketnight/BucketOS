@@ -23,12 +23,10 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     memory_initialize((const multiboot_info_t *)(uintptr_t)multiboot_info_addr);
 
     hypervisor_info_t hv = hypervisor_detect();
-    if (!hv.present) {
-        print_line("hypervisor: bare metal");
-    } else {
-        print_string("hypervisor: ");
-        print_line(hv.vendor);
-    }
+
+    print_string("Hypervisor: ");
+    print_line(hv.name);
+
 
     interrupts_initialize();
     shell_initialize();
