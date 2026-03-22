@@ -1,7 +1,7 @@
 #ifndef BUCKETKERNEL_MULTIBOOT_H
 #define BUCKETKERNEL_MULTIBOOT_H
 
-#include "bucketkernel/common.h"
+#include "bucketos/common.h"
 
 #define MULTIBOOT_BOOTLOADER_MAGIC 0x2BADB002u
 #define MULTIBOOT_INFO_MEM_MAP      0x00000040u
