@@ -1,5 +1,5 @@
-#include "bucketkernel/memory.h"
-#include "bucketkernel/string.h"
+#include "bucketos/memory.h"
+#include "bucketos/string.h"
 
 extern char kernel_end;
 
