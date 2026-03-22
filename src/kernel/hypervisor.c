@@ -19,7 +19,7 @@ static const char*hypervisor_name_from_vendor(const char *vendor) {
         return "Xen";
     }
     if (strcmp(vendor, "VBoxVBoxVBox") == 0) {
-        return "VirtualBox";
+        return "VirtualBox"; /* VirtualBox is not exposing the hypervisor-present bit to the guest. So bare metal is displayed. */
     }
     if (strcmp(vendor, "prl hyperv") == 0) {
         return "Parallels";
