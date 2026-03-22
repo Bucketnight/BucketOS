@@ -1,5 +1,5 @@
-#include "bucketkernel/pit.h"
-#include "bucketkernel/ports.h"
+#include "bucketos/pit.h"
+#include "bucketos/ports.h"
 
 static uint32_t g_ticks;
 
