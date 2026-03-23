@@ -70,14 +70,25 @@ static void shell_execute(void) {
     }
 
     if (strcmp(g_buffer, "help") == 0) {
-        print_line("commands: help about clear meminfo ticks panic shutdown");
+        print_line("commands: help about clear meminfo ticks panic shutdown reboot");
     } else if (strcmp(g_buffer, "about") == 0) {
         print_line("v0.0.1");
     } else if (strcmp(g_buffer, "clear") == 0) {
         terminal_clear();
     } else if (strcmp(g_buffer, "meminfo") == 0) {
         print_memory_info();
-    } else if (strcmp(g_buffer, "ticks") == 0) {
+    } else if (strcmp(g_buffer , "reboot") == 0) {
+        print_string("rebooting...");
+        
+        while ((inb(0x64) & 0x02u) != 0u) {
+        }
+
+        outb(0x64, 0xFE);
+
+        for (;;) {
+            cpu_halt();
+        }
+    }else if (strcmp(g_buffer, "ticks") == 0) {
         print_string("ticks: ");
         print_uint32(pit_ticks());
         print_line("");
