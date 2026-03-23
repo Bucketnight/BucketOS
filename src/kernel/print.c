@@ -54,6 +54,7 @@ void print_banner(void) {
     print_line("small x86 operating system foundation");
     print_line("");
 }
+
 void print_logo(void) {
     print_line(" ____             _        _    ____   _____ ");
     print_line("|  _ \\           | |      | |  / __ \\ / ____|");
