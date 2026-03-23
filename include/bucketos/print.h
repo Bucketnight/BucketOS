@@ -10,5 +10,6 @@ void print_uint32(uint32_t value);
 void print_hex32(uint32_t value);
 void print_hex64(uint64_t value);
 void print_banner(void);
+void print_logo(void);
 
 #endif
