@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_COMMON_H
-#define BUCKETKERNEL_COMMON_H
+#ifndef BUCKETOS_COMMON_H
+#define BUCKETOS_COMMON_H
 
 #include <stdbool.h>
 #include <stddef.h>
