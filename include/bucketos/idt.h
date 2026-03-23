@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_IDT_H
-#define BUCKETKERNEL_IDT_H
+#ifndef BUCKETOS_IDT_H
+#define BUCKETOS_IDT_H
 
 #include "bucketos/common.h"
 
