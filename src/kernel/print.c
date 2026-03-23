@@ -49,9 +49,9 @@ void print_hex64(uint64_t value) {
 
 void print_banner(void) {
     terminal_set_color(0x0A);
-    print_line("BucketKernel");
+    print_line("BucketOS");
     terminal_set_color(0x0F);
-    print_line("small x86 kernel foundation");
+    print_line("small x86 operating system foundation");
     print_line("");
 }
 void print_logo(void) {
