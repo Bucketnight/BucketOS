@@ -1,4 +1,3 @@
-#include "bucketos/commands.h"
 #include "bucketos/memory.h"
 #include "bucketos/panic.h"
 #include "bucketos/pit.h"
@@ -71,8 +70,7 @@ static void shell_execute(void) {
     }
 
     if (strcmp(g_buffer, "help") == 0) {
-        print_line("base: help about clear meminfo ticks panic shutdown reboot");
-        commands_print_help();
+        print_line("commands: help about clear meminfo ticks panic shutdown reboot");
     } else if (strcmp(g_buffer, "about") == 0) {
         print_line("v0.0.1");
     } else if (strcmp(g_buffer, "clear") == 0) {
@@ -105,7 +103,6 @@ static void shell_execute(void) {
         for (;;) {
             cpu_halt();
         }
-    } else if (commands_execute(g_buffer)) {
     } else {
         print_string("unknown command: ");
         print_line(g_buffer);
