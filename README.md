@@ -30,6 +30,7 @@ This is a solo project (or small project) made by me (Bucketnight)
 ---
 ## Clone:
 `git clone https://github.com/Bucketnight/BucketOS`
+
 ---
 ## Build:
 `make`
