@@ -38,6 +38,10 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     interrupts_initialize();
     shell_initialize();
 
+    terminal_initialize();
+    print_logo();
+    print_banner();
+    
     __asm__ volatile ("sti");
 
     shell_prompt();
