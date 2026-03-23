@@ -9,7 +9,6 @@ void io_wait(void);
 uint16_t read_cs(void);
 void cpu_halt(void);
 void outw(uint16_t port, uint16_t value);
-void cpu_reboot(void) __attribute__((noreturn));
-
+void cpu_reboot(void)__attribute__((noreturn));
 
 #endif
