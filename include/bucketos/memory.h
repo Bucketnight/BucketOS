@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_MEMORY_H
-#define BUCKETKERNEL_MEMORY_H
+#ifndef BUCKETOS_MEMORY_H
+#define BUCKETOS_MEMORY_H
 
 #include "bucketos/common.h"
 #include "bucketos/multiboot.h"
