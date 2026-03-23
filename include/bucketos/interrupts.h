@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_INTERRUPTS_H
-#define BUCKETKERNEL_INTERRUPTS_H
+#ifndef BUCKETOS_INTERRUPTS_H
+#define BUCKETOS_INTERRUPTS_H
 
 #include "bucketos/idt.h"
 
