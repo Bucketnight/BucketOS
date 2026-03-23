@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_TERMINAL_H
-#define BUCKETKERNEL_TERMINAL_H
+#ifndef BUCKETOS_TERMINAL_H
+#define BUCKETOS_TERMINAL_H
 
 #include "bucketos/common.h"
 
