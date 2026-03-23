@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_PIT_H
-#define BUCKETKERNEL_PIT_H
+#ifndef BUCKETOS_PIT_H
+#define BUCKETOS_PIT_H
 
 #include "bucketos/common.h"
 
