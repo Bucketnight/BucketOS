@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_SHELL_H
-#define BUCKETKERNEL_SHELL_H
+#ifndef BUCKETOS_SHELL_H
+#define BUCKETOS_SHELL_H
 
 void shell_initialize(void);
 void shell_prompt(void);
