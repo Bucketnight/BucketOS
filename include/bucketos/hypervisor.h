@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_HYPERVISOR_H
-#define BUCKETKERNEL_HYPERVISOR_H
+#ifndef BUCKETOS_HYPERVISOR_H
+#define BUCKETOS_HYPERVISOR_H
 
 #include "bucketos/common.h"
 
