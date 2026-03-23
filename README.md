@@ -28,6 +28,9 @@ This is a solo project (or small project) made by me (Bucketnight)
 - `sudo dnf install gcc nasm make qemu-system-x86 git grub2-tools xorriso binutils`
 
 ---
+## Clone:
+`git clone https://github.com/Bucketnight/BucketOS`
+---
 ## Build:
 `make`
 
