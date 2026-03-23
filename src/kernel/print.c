@@ -54,3 +54,14 @@ void print_banner(void) {
     print_line("small x86 kernel foundation");
     print_line("");
 }
+void print_logo(void) {
+    print_line(" ____             _        _    ____   _____ ");
+    print_line("|  _ \\           | |      | |  / __ \\ / ____|");
+    print_line("| |_) |_   _  ___| | _____| |_| |  | | (___  ");
+    print_line("|  _ <| | | |/ __| |/ / _ \\ __| |  | |\\___ \\ ");
+    print_line("| |_) | |_| | (__|   <  __/ |_| |__| |____) |");
+    print_line("|____/ \\__,_|\\___|_|\\_\\___|\\__|\\____/|_____/ ");
+    print_line("");
+    print_line("                 BucketOS");
+    print_line("");
+}
