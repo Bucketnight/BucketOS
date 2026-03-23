@@ -1,6 +1,6 @@
 /* cpuid.h: detects hpervisor or real hardware */
-#ifndef BUCKETKERNEL_CPUID_H
-#define BUCKETKERNEL_CPUID_H
+#ifndef BUCKETOS_CPUID_H
+#define BUCKETOS_CPUID_H
 
 #include "bucketos/common.h"
 
