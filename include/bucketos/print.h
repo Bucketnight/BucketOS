@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_PRINT_H
-#define BUCKETKERNEL_PRINT_H
+#ifndef BUCKETOS_PRINT_H
+#define BUCKETOS_PRINT_H
 
 #include "bucketos/common.h"
 
