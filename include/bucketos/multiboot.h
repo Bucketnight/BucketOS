@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_MULTIBOOT_H
-#define BUCKETKERNEL_MULTIBOOT_H
+#ifndef BUCKETOS_MULTIBOOT_H
+#define BUCKETOS_MULTIBOOT_H
 
 #include "bucketos/common.h"
 
