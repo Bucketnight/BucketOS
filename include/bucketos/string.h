@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_STRING_H
-#define BUCKETKERNEL_STRING_H
+#ifndef BUCKETOS_STRING_H
+#define BUCKETOS_STRING_H
 
 #include "bucketos/common.h"
 
