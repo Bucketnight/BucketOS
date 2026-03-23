@@ -1,5 +1,5 @@
-#ifndef BUCKETKERNEL_PORTS_H
-#define BUCKETKERNEL_PORTS_H
+#ifndef BUCKETOS_PORTS_H
+#define BUCKETOS_PORTS_H
 
 #include "bucketos/common.h"
 
