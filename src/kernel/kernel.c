@@ -6,13 +6,18 @@
 #include "bucketos/print.h"
 #include "bucketos/shell.h"
 #include "bucketos/terminal.h"
+#include "bucketos/framebuffer.h"
 #include "bucketos/hypervisor.h"
 #include "bucketos/panic.h"
 #include "bucketos/serial.h"
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
+    const multiboot_info_t *multiboot =
+        (const multiboot_info_t *)(uintptr_t)multiboot_info_addr;
+
     serial_initialize();
     terminal_initialize();
+    print_logo();
     print_banner();
     if (serial_is_ready()) {
         print_line("serial: com1 ready");
@@ -23,7 +28,21 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     }
 
     print_line("multiboot: ok");
-    memory_initialize((const multiboot_info_t *)(uintptr_t)multiboot_info_addr);
+    memory_initialize(multiboot);
+    framebuffer_initialize(multiboot);
+
+    const framebuffer_info_t *framebuffer = framebuffer_info();
+    if (framebuffer->available) {
+        print_string("framebuffer: ");
+        print_uint32(framebuffer->width);
+        print_char('x');
+        print_uint32(framebuffer->height);
+        print_char('x');
+        print_uint32(framebuffer->bpp);
+        print_line("");
+    } else {
+        print_line("framebuffer: unavailable");
+    }
 
     hypervisor_info_t hv = hypervisor_detect();
 
@@ -37,10 +56,6 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
 
     interrupts_initialize();
     shell_initialize();
-
-    terminal_initialize();
-    print_logo();
-    print_banner();
     
     __asm__ volatile ("sti");
 
