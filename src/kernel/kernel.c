@@ -40,6 +40,7 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
         print_char('x');
         print_uint32(framebuffer->bpp);
         print_line("");
+        framebuffer_fill(0x00121824u);
     } else {
         print_line("framebuffer: unavailable");
     }
