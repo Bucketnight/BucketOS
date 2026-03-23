@@ -30,9 +30,14 @@ SOURCES_C := \
 	src/kernel/keyboard.c \
 	src/kernel/hypervisor.c \
 	src/kernel/serial.c \
+	src/kernel/framebuffer.c \
 	src/kernel/memory.c \
 	src/kernel/panic.c \
+	src/kernel/commands.c \
 	src/kernel/shell.c \
+	src/commands/logo.c \
+	src/commands/hypervisor.c \
+	src/commands/uptime.c \
 
 
 SOURCES_S := \
