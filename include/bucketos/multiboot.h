@@ -4,6 +4,7 @@
 #include "bucketos/common.h"
 
 #define MULTIBOOT_BOOTLOADER_MAGIC 0x2BADB002u
+#define MULTIBOOT_INFO_MODS         0x00000008u
 #define MULTIBOOT_INFO_MEM_MAP      0x00000040u
 #define MULTIBOOT_INFO_FRAMEBUFFER 0x00001000u
 
@@ -45,5 +46,12 @@ typedef struct {
     uint64_t len;
     uint32_t type;
 } __attribute__((packed)) multiboot_mmap_entry_t;
+
+typedef struct {
+    uint32_t mod_start;
+    uint32_t mod_end;
+    uint32_t string;
+    uint32_t reserved;
+} __attribute__((packed)) multiboot_module_t;
 
 #endif
