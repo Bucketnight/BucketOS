@@ -7,6 +7,7 @@
 #include "bucketos/shell.h"
 #include "bucketos/terminal.h"
 #include "bucketos/framebuffer.h"
+#include "bucketos/vfs.h"
 #include "bucketos/hypervisor.h"
 #include "bucketos/panic.h"
 #include "bucketos/serial.h"
@@ -29,6 +30,18 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
 
     print_line("multiboot: ok");
     memory_initialize(multiboot);
+    vfs_initialize();
+
+    if ((multiboot->flags & MULTIBOOT_INFO_MODS) != 0u && multiboot->mods_count > 0u) {
+        const multiboot_module_t *module =
+            (const multiboot_module_t *)(uintptr_t)multiboot->mods_addr;
+        const size_t initrd_size = (size_t)(module[0].mod_end - module[0].mod_start);
+        vfs_load_initrd((const void *)(uintptr_t)module[0].mod_start, initrd_size);
+        print_line("initrd: loaded");
+    } else {
+        print_line("initrd: unavailable");
+    }
+
     framebuffer_initialize(multiboot);
 
     const framebuffer_info_t *framebuffer = framebuffer_info();
@@ -40,7 +53,15 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
         print_char('x');
         print_uint32(framebuffer->bpp);
         print_line("");
-        framebuffer_fill(0x00121824u);
+        print_string("framebuffer type: ");
+        print_uint32(framebuffer->type);
+        print_line("");
+        print_string("framebuffer pitch: ");
+        print_uint32(framebuffer->pitch);
+        print_line("");
+        print_string("framebuffer addr: ");
+        print_hex32((uint32_t)framebuffer->address);
+        print_line("");
     } else {
         print_line("framebuffer: unavailable");
     }
@@ -63,6 +84,10 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     shell_prompt();
 
     for (;;) {
+        if (shell_has_pending_command()) {
+            shell_run_pending_command();
+            continue;
+        }
         cpu_halt();
     }
 }
