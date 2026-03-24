@@ -1,4 +1,3 @@
-#include "bucketos/config.h"
 #include "bucketos/panic.h"
 #include "bucketos/ports.h"
 #include "bucketos/print.h"
