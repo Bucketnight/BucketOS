@@ -16,6 +16,7 @@ OBJ_DIR := $(BUILD_DIR)/obj
 ISO_DIR := $(BUILD_DIR)/iso
 KERNEL := $(BUILD_DIR)/kernel.elf
 ISO := $(BUILD_DIR)/BucketKernel.iso
+INITRD := $(BUILD_DIR)/initrd.tar
 GENERATED_CONFIG := include/bucketos/config.h
 
 SOURCES_C := \
@@ -31,6 +32,9 @@ SOURCES_C := \
 	src/kernel/hypervisor.c \
 	src/kernel/serial.c \
 	src/kernel/framebuffer.c \
+	src/kernel/ramfs.c \
+	src/kernel/devfs.c \
+	src/kernel/vfs.c \
 	src/kernel/memory.c \
 	src/kernel/panic.c \
 	src/kernel/shell.c \
@@ -70,8 +74,9 @@ config: $(GENERATED_CONFIG)
 $(KERNEL): $(OBJECTS) linker.ld | $(BUILD_DIR)
 	$(LD) $(LDFLAGS) -o $@ $(OBJECTS) -lgcc
 
-$(ISO): $(KERNEL) iso/boot/grub/grub.cfg | $(ISO_DIR)
+$(ISO): $(KERNEL) $(INITRD) iso/boot/grub/grub.cfg | $(ISO_DIR)
 	cp $(KERNEL) $(ISO_DIR)/boot/kernel.elf
+	cp $(INITRD) $(ISO_DIR)/boot/initrd.tar
 	cp iso/boot/grub/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
 	$(GRUB_MKRESCUE) -o $@ $(ISO_DIR)
 
@@ -91,3 +96,6 @@ $(ISO_DIR):
 
 $(GENERATED_CONFIG): $(CONFIG_FILE) scripts/genconfig.sh
 	$(GENCONFIG) $(CONFIG_FILE) $@
+
+$(INITRD): | $(BUILD_DIR)
+	tar --format=ustar -cf $@ -C initrd .
