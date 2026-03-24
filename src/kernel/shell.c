@@ -6,6 +6,8 @@
 #include "bucketos/shell.h"
 #include "bucketos/string.h"
 #include "bucketos/terminal.h"
+#include "bucketos/framebuffer.h"
+#include "bucketos/vfs.h"
 
 enum {
     SHELL_BUFFER_SIZE = 128
@@ -13,6 +15,57 @@ enum {
 
 static char g_buffer[SHELL_BUFFER_SIZE];
 static size_t g_length;
+static bool g_rect_mode;
+static bool g_rect_exit_requested;
+static bool g_command_ready;
+static void shell_run_rect_demo(void);
+static void shell_execute(void);
+
+static char *skip_spaces(char *text) {
+    while (*text == ' ') {
+        ++text;
+    }
+    return text;
+}
+
+static void print_fs_entry(const char *name, bool is_dir, void *context) {
+    (void)context;
+    print_string(is_dir ? "dir  " : "file ");
+    print_line(name);
+}
+
+static void shell_list_path(const char *path) {
+    if (!vfs_list(path, print_fs_entry, 0)) {
+        const char *data;
+        size_t size;
+        if (vfs_read(path, &data, &size)) {
+            (void)data;
+            (void)size;
+            print_fs_entry(path, false, 0);
+            return;
+        }
+        print_line("ls: path not found");
+    }
+}
+
+static void shell_cat_file(const char *path) {
+    const char *data;
+    size_t size;
+
+    if (!vfs_read(path, &data, &size)) {
+        print_line("cat: file not found");
+        return;
+    }
+
+    if (vfs_is_dir(path)) {
+        print_line("cat: path is a directory");
+        return;
+    }
+
+    (void)size;
+    print_line(data);
+}
+
 
 static const char *memory_type_name(uint32_t type) {
     switch (type)
@@ -69,15 +122,28 @@ static void shell_execute(void) {
         return;
     }
 
-    if (strcmp(g_buffer, "help") == 0) {
-        print_line("commands: help about clear meminfo ticks panic shutdown reboot");
-    } else if (strcmp(g_buffer, "about") == 0) {
+    char *command = g_buffer;
+    char *args = command;
+    while (*args != '\0' && *args != ' ') {
+        ++args;
+    }
+
+    if (*args != '\0') {
+        *args++ = '\0';
+        args = skip_spaces(args);
+    }
+
+    if (strcmp(command, "help") == 0) {
+        print_line("commands: help about clear meminfo ticks panic shutdown reboot rect");
+        print_line("fs: ls cat mkdir touch write");
+        print_line("note: / mounts ramfs, /dev mounts devfs");
+    } else if (strcmp(command, "about") == 0) {
         print_line("v0.0.1");
-    } else if (strcmp(g_buffer, "clear") == 0) {
+    } else if (strcmp(command, "clear") == 0) {
         terminal_clear();
-    } else if (strcmp(g_buffer, "meminfo") == 0) {
+    } else if (strcmp(command, "meminfo") == 0) {
         print_memory_info();
-    } else if (strcmp(g_buffer , "reboot") == 0) {
+    } else if (strcmp(command, "reboot") == 0) {
         print_string("rebooting...");
         
         while ((inb(0x64) & 0x02u) != 0u) {
@@ -88,13 +154,15 @@ static void shell_execute(void) {
         for (;;) {
             cpu_halt();
         }
-    }else if (strcmp(g_buffer, "ticks") == 0) {
+    } else if (strcmp(command, "ticks") == 0) {
         print_string("ticks: ");
         print_uint32(pit_ticks());
         print_line("");
-    } else if (strcmp(g_buffer, "panic") == 0) {
+    } else if (strcmp(command, "panic") == 0) {
         panic("panic command requested from shell");
-    } else if (strcmp(g_buffer, "shutdown") == 0) {
+    } else if (strcmp(command, "rect") == 0) {
+        shell_run_rect_demo();
+    } else if (strcmp(command, "shutdown") == 0) {
         print_line("powering off");
 
         outw(0x604, 0x2000);
@@ -103,9 +171,48 @@ static void shell_execute(void) {
         for (;;) {
             cpu_halt();
         }
+    } else if (strcmp(command, "ls") == 0) {
+        shell_list_path((*args != '\0') ? args : "/");
+    } else if (strcmp(command, "cat") == 0) {
+        if (*args == '\0') {
+            print_line("cat: missing path");
+        } else {
+            shell_cat_file(args);
+        }
+    } else if (strcmp(command, "mkdir") == 0) {
+        if (*args == '\0') {
+            print_line("mkdir: missing path");
+        } else if (!vfs_mkdir(args)) {
+            print_line("mkdir: failed");
+        }
+    } else if (strcmp(command, "touch") == 0) {
+        if (*args == '\0') {
+            print_line("touch: missing path");
+        } else if (!vfs_touch(args)) {
+            print_line("touch: failed");
+        }
+    } else if (strcmp(command, "write") == 0) {
+        char *path = args;
+        while (*args != '\0' && *args != ' ') {
+            ++args;
+        }
+
+        if (*path == '\0') {
+            print_line("write: missing path");
+        } else {
+            char *data = args;
+            if (*data != '\0') {
+                *data++ = '\0';
+                data = skip_spaces(data);
+            }
+
+            if (!vfs_write(path, data)) {
+                print_line("write: failed");
+            }
+        }
     } else {
         print_string("unknown command: ");
-        print_line(g_buffer);
+        print_line(command);
     }
 
     g_length = 0;
@@ -114,6 +221,9 @@ static void shell_execute(void) {
 
 void shell_initialize(void) {
     g_length = 0;
+    g_rect_mode = false;
+    g_rect_exit_requested = false;
+    g_command_ready = false;
 }
 
 void shell_prompt(void) {
@@ -123,7 +233,11 @@ void shell_prompt(void) {
 void shell_handle_char(char c) {
     if (c == '\n') {
         terminal_put_char('\n');
-        shell_execute();
+        g_command_ready = true;
+        return;
+    }
+
+    if (g_rect_mode) {
         return;
     }
 
@@ -147,4 +261,40 @@ void shell_handle_char(char c) {
 
     g_buffer[g_length++] = c;
     terminal_put_char(c);
+}
+
+bool shell_has_pending_command(void) {
+    return g_command_ready;
+}
+
+void shell_run_pending_command(void) {
+    if (!g_command_ready) {
+        return;
+    }
+
+    g_command_ready = false;
+    shell_execute();
+}
+
+void shell_request_stop(void) {
+    g_rect_exit_requested = true;
+}
+static void shell_run_rect_demo(void) {
+    g_rect_mode = true;
+    g_rect_exit_requested = false;
+
+    print_line("rect demo: press Ctrl+C to stop");
+
+    framebuffer_fill(0x00121824u);
+    framebuffer_draw_rect(100, 80, 320, 180, 0x00FF0000u);
+    framebuffer_draw_rect(160, 140, 180, 100, 0x0000FF00u);
+    framebuffer_draw_rect(220, 200, 120, 60, 0x000000FFu);
+
+    while (!g_rect_exit_requested) {
+        cpu_halt();
+    }
+
+    g_rect_mode = false;
+    g_rect_exit_requested = false;
+    framebuffer_fill(0x00121824u);
 }
