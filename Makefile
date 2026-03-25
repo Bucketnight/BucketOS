@@ -25,6 +25,7 @@ SOURCES_C := \
 	src/kernel/string.c \
 	src/kernel/print.c \
 	src/kernel/ports.c \
+	src/kernel/gdt.c \
 	src/kernel/idt.c \
 	src/kernel/interrupts.c \
 	src/kernel/pit.c \
@@ -32,6 +33,9 @@ SOURCES_C := \
 	src/kernel/hypervisor.c \
 	src/kernel/serial.c \
 	src/kernel/framebuffer.c \
+	src/kernel/paging.c \
+	src/kernel/syscall.c \
+	src/kernel/usertest.c \
 	src/kernel/ramfs.c \
 	src/kernel/devfs.c \
 	src/kernel/vfs.c \
