@@ -7,25 +7,32 @@
 #include "bucketos/shell.h"
 #include "bucketos/terminal.h"
 #include "bucketos/framebuffer.h"
-#include "bucketos/vfs.h"
+#include "bucketos/gdt.h"
 #include "bucketos/hypervisor.h"
 #include "bucketos/panic.h"
+#include "bucketos/paging.h"
 #include "bucketos/serial.h"
+#include "bucketos/usertest.h"
+#include "bucketos/vfs.h"
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     const multiboot_info_t *multiboot =
         (const multiboot_info_t *)(uintptr_t)multiboot_info_addr;
 
     serial_initialize();
+
+    if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+        terminal_initialize();
+        panic("multiboot: invalid loader state");
+    }
+
+    framebuffer_initialize(multiboot);
+    terminal_configure_framebuffer(framebuffer_info());
     terminal_initialize();
     print_logo();
     print_banner();
     if (serial_is_ready()) {
         print_line("serial: com1 ready");
-    }
-
-    if (multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        panic("multiboot: invalid loader state");
     }
 
     print_line("multiboot: ok");
@@ -42,7 +49,23 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
         print_line("initrd: unavailable");
     }
 
-    framebuffer_initialize(multiboot);
+    paging_initialize(framebuffer_info());
+    paging_map_initial_user_space();
+    usertest_initialize();
+    print_line("paging: enabled");
+    gdt_initialize();
+
+    const user_space_mapping_t *user_space = paging_user_space();
+    print_string("user code: ");
+    print_hex32((uint32_t)user_space->code_virtual);
+    print_string(" -> ");
+    print_hex32((uint32_t)user_space->code_physical);
+    print_line("");
+    print_string("user stack: ");
+    print_hex32((uint32_t)user_space->stack_bottom_virtual);
+    print_string(" - ");
+    print_hex32((uint32_t)user_space->stack_top_virtual);
+    print_line("");
 
     const framebuffer_info_t *framebuffer = framebuffer_info();
     if (framebuffer->available) {
