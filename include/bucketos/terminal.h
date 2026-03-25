@@ -2,7 +2,9 @@
 #define BUCKETOS_TERMINAL_H
 
 #include "bucketos/common.h"
+#include "bucketos/framebuffer.h"
 
+void terminal_configure_framebuffer(const framebuffer_info_t *framebuffer);
 void terminal_initialize(void);
 void terminal_clear(void);
 void terminal_put_char(char c);
