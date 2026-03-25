@@ -7,6 +7,7 @@
 #include "bucketos/string.h"
 #include "bucketos/terminal.h"
 #include "bucketos/framebuffer.h"
+#include "bucketos/usertest.h"
 #include "bucketos/vfs.h"
 
 enum {
@@ -134,7 +135,7 @@ static void shell_execute(void) {
     }
 
     if (strcmp(command, "help") == 0) {
-        print_line("commands: help about clear meminfo ticks panic shutdown reboot rect");
+        print_line("commands: help about clear meminfo ticks panic shutdown reboot rect usertest");
         print_line("fs: ls cat mkdir touch write");
         print_line("note: / mounts ramfs, /dev mounts devfs");
     } else if (strcmp(command, "about") == 0) {
@@ -162,6 +163,11 @@ static void shell_execute(void) {
         panic("panic command requested from shell");
     } else if (strcmp(command, "rect") == 0) {
         shell_run_rect_demo();
+    } else if (strcmp(command, "usertest") == 0) {
+        print_line("entering ring 3...");
+        print_string("user exit: ");
+        print_uint32(usertest_run());
+        print_line("");
     } else if (strcmp(command, "shutdown") == 0) {
         print_line("powering off");
 
