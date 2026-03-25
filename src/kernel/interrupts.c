@@ -1,9 +1,11 @@
+#include "bucketos/gdt.h"
 #include "bucketos/interrupts.h"
 #include "bucketos/keyboard.h"
 #include "bucketos/panic.h"
 #include "bucketos/pit.h"
 #include "bucketos/ports.h"
 #include "bucketos/print.h"
+#include "bucketos/syscall.h"
 #include "bucketos/terminal.h"
 
 extern void isr0(void);
@@ -54,6 +56,7 @@ extern void isr44(void);
 extern void isr45(void);
 extern void isr46(void);
 extern void isr47(void);
+extern void isr128(void);
 
 static const char *const g_exception_names[] = {
     "divide error",
@@ -139,14 +142,15 @@ void interrupts_initialize(void) {
     idt_initialize();
     pic_remap();
 
-    const uint16_t selector = read_cs();
     for (uint8_t vector = 0; vector < 48; ++vector) {
-        idt_set_gate(vector, (uintptr_t)handlers[vector], selector, 0x8E);
+        idt_set_gate(vector, (uintptr_t)handlers[vector], GDT_KERNEL_CODE_SELECTOR, 0x8E);
     }
+    idt_set_gate(0x80u, (uintptr_t)isr128, GDT_KERNEL_CODE_SELECTOR, 0xEE);
 
     pit_initialize(100);
     keyboard_initialize();
 
+    print_line("gdt: loaded");
     print_line("idt: loaded");
     print_line("pic: remapped");
     print_line("pit: 100 hz");
@@ -156,6 +160,11 @@ void interrupts_initialize(void) {
 void interrupt_dispatch(registers_t *regs) {
     if (regs->int_no < 32) {
         panic_exception(g_exception_names[regs->int_no], regs);
+    }
+
+    if (regs->int_no == 0x80u) {
+        regs->eax = syscall_dispatch(regs);
+        return;
     }
 
     switch (regs->int_no) {
