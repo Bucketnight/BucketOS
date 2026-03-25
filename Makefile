@@ -6,6 +6,7 @@ CONFIG_FILE ?= .config
 GENCONFIG := ./scripts/genconfig.sh
 GRUB_MKRESCUE ?= grub2-mkrescue
 QEMU ?= qemu-system-x86_64
+Q := @
 
 CFLAGS := -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -Werror -O2 -Iinclude
 ASFLAGS := -m32 -ffreestanding
@@ -61,45 +62,55 @@ kernel: $(KERNEL)
 iso: $(ISO)
 
 run: $(ISO)
-	$(QEMU) -cdrom $(ISO)
+	$(Q)printf "RUN    %s\n" "$(ISO)"
+	$(Q)$(QEMU) -cdrom $(ISO)
 
 run-serial: $(ISO)
-	$(QEMU) -cdrom $(ISO) -display none -serial stdio
+	$(Q)printf "RUN    %s\n" "$(ISO)"
+	$(Q)$(QEMU) -cdrom $(ISO) -display none -serial stdio
 
 clean:
-	rm -rf $(BUILD_DIR)
-	rm -f $(GENERATED_CONFIG)
+	$(Q)printf "CLEAN  %s\n" "$(BUILD_DIR)"
+	$(Q)rm -rf $(BUILD_DIR)
+	$(Q)rm -f $(GENERATED_CONFIG)
 
 defconfig: configs/defconfig
-	cp $< $(CONFIG_FILE)
+	$(Q)printf "CONF   %s\n" "$(CONFIG_FILE)"
+	$(Q)cp $< $(CONFIG_FILE)
 
 config: $(GENERATED_CONFIG)
 
 $(KERNEL): $(OBJECTS) linker.ld | $(BUILD_DIR)
-	$(LD) $(LDFLAGS) -o $@ $(OBJECTS) -lgcc
+	$(Q)printf "LD     %s\n" "$@"
+	$(Q)$(LD) $(LDFLAGS) -o $@ $(OBJECTS) -lgcc
 
 $(ISO): $(KERNEL) $(INITRD) iso/boot/grub/grub.cfg | $(ISO_DIR)
-	cp $(KERNEL) $(ISO_DIR)/boot/kernel.elf
-	cp $(INITRD) $(ISO_DIR)/boot/initrd.tar
-	cp iso/boot/grub/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
-	$(GRUB_MKRESCUE) -o $@ $(ISO_DIR)
+	$(Q)printf "ISO    %s\n" "$@"
+	$(Q)cp $(KERNEL) $(ISO_DIR)/boot/kernel.elf
+	$(Q)cp $(INITRD) $(ISO_DIR)/boot/initrd.tar
+	$(Q)cp iso/boot/grub/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	$(Q)$(GRUB_MKRESCUE) -o $@ $(ISO_DIR)
 
 $(OBJ_DIR)/%.o: src/%.c $(GENERATED_CONFIG)
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(Q)mkdir -p $(dir $@)
+	$(Q)printf "C      %s\n" "$<"
+	$(Q)$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/%.o: src/%.s
-	mkdir -p $(dir $@)
-	$(AS) $(ASFLAGS) -c $< -o $@
+	$(Q)mkdir -p $(dir $@)
+	$(Q)printf "AS     %s\n" "$<"
+	$(Q)$(AS) $(ASFLAGS) -c $< -o $@
 
 $(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+	$(Q)mkdir -p $(BUILD_DIR)
 
 $(ISO_DIR):
-	mkdir -p $(ISO_DIR)/boot/grub
+	$(Q)mkdir -p $(ISO_DIR)/boot/grub
 
 $(GENERATED_CONFIG): $(CONFIG_FILE) scripts/genconfig.sh
-	$(GENCONFIG) $(CONFIG_FILE) $@
+	$(Q)printf "CONF   %s\n" "$@"
+	$(Q)$(GENCONFIG) $(CONFIG_FILE) $@
 
 $(INITRD): | $(BUILD_DIR)
-	tar --format=ustar -cf $@ -C initrd .
+	$(Q)printf "TAR    %s\n" "$@"
+	$(Q)tar --format=ustar -cf $@ -C initrd .
