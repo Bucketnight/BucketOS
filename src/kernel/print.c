@@ -10,8 +10,8 @@ static void print_uint_recursive(uint32_t value) {
 }
 
 void print_char(char c) {
-    terminal_put_char(c);
     serial_write_char(c);
+    terminal_put_char(c);
 }
 
 void print_string(const char *text) {
