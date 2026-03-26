@@ -1,3 +1,4 @@
+#include "bucketos/exec.h"
 #include "bucketos/memory.h"
 #include "bucketos/panic.h"
 #include "bucketos/pit.h"
@@ -7,7 +8,6 @@
 #include "bucketos/string.h"
 #include "bucketos/terminal.h"
 #include "bucketos/framebuffer.h"
-#include "bucketos/usertest.h"
 #include "bucketos/vfs.h"
 
 enum {
@@ -67,16 +67,14 @@ static void shell_cat_file(const char *path) {
     print_line(data);
 }
 
-
 static const char *memory_type_name(uint32_t type) {
-    switch (type)
-    {
-    case 1: return "usable";
-    case 2: return "reserved";
-    case 3: return "acpi claimable";
-    case 4: return "acpi nvs";
-    case 5: return "bad memory";
-    default: return "unknown";
+    switch (type) {
+        case 1: return "usable";
+        case 2: return "reserved";
+        case 3: return "acpi claimable";
+        case 4: return "acpi nvs";
+        case 5: return "bad memory";
+        default: return "unknown";
     }
 }
 
@@ -135,7 +133,7 @@ static void shell_execute(void) {
     }
 
     if (strcmp(command, "help") == 0) {
-        print_line("commands: help about clear meminfo ticks panic shutdown reboot rect usertest");
+        print_line("commands: help about clear meminfo ticks panic shutdown reboot rect exec");
         print_line("fs: ls cat mkdir touch write");
         print_line("note: / mounts ramfs, /dev mounts devfs");
     } else if (strcmp(command, "about") == 0) {
@@ -146,7 +144,7 @@ static void shell_execute(void) {
         print_memory_info();
     } else if (strcmp(command, "reboot") == 0) {
         print_string("rebooting...");
-        
+
         while ((inb(0x64) & 0x02u) != 0u) {
         }
 
@@ -163,11 +161,37 @@ static void shell_execute(void) {
         panic("panic command requested from shell");
     } else if (strcmp(command, "rect") == 0) {
         shell_run_rect_demo();
-    } else if (strcmp(command, "usertest") == 0) {
-        print_line("entering ring 3...");
-        print_string("user exit: ");
-        print_uint32(usertest_run());
-        print_line("");
+    } else if (strcmp(command, "exec") == 0) {
+        if (*args == '\0') {
+            print_line("exec: missing path");
+        } else {
+            enum { EXEC_ARGV_MAX = 8 };
+            const char *argv[EXEC_ARGV_MAX];
+            int argc = 0;
+            char *cursor = args;
+
+            while (*cursor != '\0' && argc < EXEC_ARGV_MAX) {
+                argv[argc++] = cursor;
+                while (*cursor != '\0' && *cursor != ' ') {
+                    ++cursor;
+                }
+                if (*cursor == '\0') {
+                    break;
+                }
+                *cursor++ = '\0';
+                cursor = skip_spaces(cursor);
+            }
+
+            print_line("entering ring 3...");
+            const uint32_t exit_code = exec_run_argv(argv[0], argc, argv);
+            if (exit_code == 0xFFFFFFFFu) {
+                print_line("exec: failed");
+            } else {
+                print_string("user exit: ");
+                print_uint32(exit_code);
+                print_line("");
+            }
+        }
     } else if (strcmp(command, "shutdown") == 0) {
         print_line("powering off");
 
@@ -285,6 +309,7 @@ void shell_run_pending_command(void) {
 void shell_request_stop(void) {
     g_rect_exit_requested = true;
 }
+
 static void shell_run_rect_demo(void) {
     g_rect_mode = true;
     g_rect_exit_requested = false;
