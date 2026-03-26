@@ -1,3 +1,4 @@
+#include "bucketos/console.h"
 #include "bucketos/interrupts.h"
 #include "bucketos/kernel.h"
 #include "bucketos/memory.h"
@@ -11,8 +12,9 @@
 #include "bucketos/hypervisor.h"
 #include "bucketos/panic.h"
 #include "bucketos/paging.h"
+#include "bucketos/process.h"
+#include "bucketos/scheduler.h"
 #include "bucketos/serial.h"
-#include "bucketos/usertest.h"
 #include "bucketos/vfs.h"
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
@@ -37,6 +39,7 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
 
     print_line("multiboot: ok");
     memory_initialize(multiboot);
+    console_initialize();
     vfs_initialize();
 
     if ((multiboot->flags & MULTIBOOT_INFO_MODS) != 0u && multiboot->mods_count > 0u) {
@@ -51,15 +54,16 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
 
     paging_initialize(framebuffer_info());
     paging_map_initial_user_space();
-    usertest_initialize();
     print_line("paging: enabled");
     gdt_initialize();
+    process_initialize();
+    scheduler_initialize();
 
     const user_space_mapping_t *user_space = paging_user_space();
-    print_string("user code: ");
-    print_hex32((uint32_t)user_space->code_virtual);
-    print_string(" -> ");
-    print_hex32((uint32_t)user_space->code_physical);
+    print_string("user image: ");
+    print_hex32((uint32_t)user_space->image_base_virtual);
+    print_string(" size=");
+    print_hex32((uint32_t)user_space->image_size);
     print_line("");
     print_string("user stack: ");
     print_hex32((uint32_t)user_space->stack_bottom_virtual);
@@ -101,7 +105,7 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
 
     interrupts_initialize();
     shell_initialize();
-    
+
     __asm__ volatile ("sti");
 
     shell_prompt();
