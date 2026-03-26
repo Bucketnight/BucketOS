@@ -5,11 +5,10 @@
 #include "bucketos/framebuffer.h"
 
 typedef struct {
-    uintptr_t code_virtual;
-    uintptr_t code_physical;
+    uintptr_t image_base_virtual;
+    size_t image_size;
     uintptr_t stack_bottom_virtual;
     uintptr_t stack_top_virtual;
-    uintptr_t stack_physical;
 } user_space_mapping_t;
 
 void paging_initialize(const framebuffer_info_t *framebuffer);
