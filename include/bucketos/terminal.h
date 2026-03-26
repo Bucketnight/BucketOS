@@ -12,5 +12,6 @@ void terminal_write(const char *data);
 void terminal_write_line(const char *data);
 void terminal_set_color(uint8_t color);
 uint8_t terminal_get_color(void);
+void terminal_set_framebuffer_lock(bool locked);
 
 #endif
