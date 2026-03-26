@@ -1,6 +1,7 @@
 #include "bucketos/gdt.h"
 #include "bucketos/interrupts.h"
 #include "bucketos/keyboard.h"
+#include "bucketos/mouse.h"
 #include "bucketos/panic.h"
 #include "bucketos/pit.h"
 #include "bucketos/ports.h"
@@ -117,8 +118,8 @@ static void pic_remap(void) {
     outb(0xA1, 0x01);
     io_wait();
 
-    outb(0x21, master_mask & (uint8_t)~0x03u);
-    outb(0xA1, slave_mask);
+    outb(0x21, master_mask & (uint8_t)~0x07u);
+    outb(0xA1, slave_mask & (uint8_t)~0x10u);
 }
 
 static void pic_send_eoi(uint32_t interrupt_number) {
@@ -149,12 +150,14 @@ void interrupts_initialize(void) {
 
     pit_initialize(100);
     keyboard_initialize();
+    mouse_initialize();
 
     print_line("gdt: loaded");
     print_line("idt: loaded");
     print_line("pic: remapped");
     print_line("pit: 100 hz");
     print_line("keyboard: irq1 online");
+    print_line("mouse: irq12 online");
 }
 
 void interrupt_dispatch(registers_t *regs) {
@@ -173,6 +176,9 @@ void interrupt_dispatch(registers_t *regs) {
             break;
         case 33:
             keyboard_handle_irq();
+            break;
+        case 44:
+            mouse_handle_irq();
             break;
         default:
             break;
