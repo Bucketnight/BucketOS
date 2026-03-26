@@ -26,5 +26,6 @@ typedef struct {
 void memory_initialize(const multiboot_info_t *multiboot);
 const memory_info_t *memory_info(void);
 void *kmalloc(size_t size);
+void *kmalloc_aligned(size_t size, size_t alignment);
 
 #endif
