@@ -127,6 +127,7 @@ static uint16_t *const g_buffer = (uint16_t *)VGA_MEMORY;
 static terminal_cell_t g_cells[TERMINAL_MAX_ROWS][TERMINAL_MAX_COLUMNS];
 static bool g_use_framebuffer;
 static bool g_cursor_visible;
+static bool g_framebuffer_locked;
 static framebuffer_info_t g_framebuffer;
 
 static uint16_t vga_entry(unsigned char c, uint8_t color) {
@@ -158,7 +159,7 @@ static void framebuffer_plot(uint32_t x, uint32_t y, uint32_t color) {
 }
 
 static void terminal_draw_framebuffer_cell(size_t x, size_t y, bool cursor) {
-    if (!g_use_framebuffer || x >= g_width || y >= g_height) {
+    if (!g_use_framebuffer || g_framebuffer_locked || x >= g_width || y >= g_height) {
         return;
     }
 
@@ -190,6 +191,13 @@ static void terminal_draw_framebuffer_cell(size_t x, size_t y, bool cursor) {
 
 static void terminal_update_cursor(void) {
     if (g_use_framebuffer) {
+        if (g_framebuffer_locked) {
+            g_cursor_column = g_column;
+            g_cursor_row = g_row;
+            g_cursor_visible = false;
+            return;
+        }
+
         if (g_cursor_visible && g_cursor_column < g_width && g_cursor_row < g_height) {
             terminal_draw_framebuffer_cell(g_cursor_column, g_cursor_row, false);
         }
@@ -216,6 +224,9 @@ static void terminal_write_cell(size_t x, size_t y) {
     }
 
     if (g_use_framebuffer) {
+        if (g_framebuffer_locked) {
+            return;
+        }
         terminal_draw_framebuffer_cell(x, y, x == g_column && y == g_row);
         return;
     }
@@ -240,9 +251,11 @@ static void scroll_if_needed(void) {
     }
 
     if (g_use_framebuffer) {
-        for (size_t y = 0; y < g_height; ++y) {
-            for (size_t x = 0; x < g_width; ++x) {
-                terminal_draw_framebuffer_cell(x, y, false);
+        if (!g_framebuffer_locked) {
+            for (size_t y = 0; y < g_height; ++y) {
+                for (size_t x = 0; x < g_width; ++x) {
+                    terminal_draw_framebuffer_cell(x, y, false);
+                }
             }
         }
     } else {
@@ -308,7 +321,7 @@ void terminal_initialize(void) {
 }
 
 void terminal_clear(void) {
-    if (g_use_framebuffer) {
+    if (g_use_framebuffer && !g_framebuffer_locked) {
         for (uint32_t y = 0; y < g_framebuffer.height; ++y) {
             for (uint32_t x = 0; x < g_framebuffer.width; ++x) {
                 framebuffer_plot(x, y, terminal_color_to_rgb((uint8_t)((g_color >> 4) & 0x0Fu)));
@@ -394,4 +407,33 @@ void terminal_set_color(uint8_t color) {
 
 uint8_t terminal_get_color(void) {
     return g_color;
+}
+
+static void terminal_redraw_framebuffer(void) {
+    if (!g_use_framebuffer || g_framebuffer_locked) {
+        return;
+    }
+
+    for (size_t y = 0; y < g_height; ++y) {
+        for (size_t x = 0; x < g_width; ++x) {
+            terminal_draw_framebuffer_cell(x, y, false);
+        }
+    }
+
+    g_cursor_visible = false;
+    terminal_update_cursor();
+}
+
+void terminal_set_framebuffer_lock(bool locked) {
+    const bool was_locked = g_framebuffer_locked;
+    g_framebuffer_locked = locked;
+
+    if (!was_locked && locked) {
+        g_cursor_visible = false;
+        return;
+    }
+
+    if (was_locked && !locked) {
+        terminal_redraw_framebuffer();
+    }
 }
