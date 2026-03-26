@@ -1,3 +1,4 @@
+#include "bucketos/console.h"
 #include "bucketos/keyboard.h"
 #include "bucketos/ports.h"
 #include "bucketos/shell.h"
@@ -35,6 +36,13 @@ void keyboard_handle_irq(void) {
     }
 
     const char c = g_scancode_map[scancode];
+    if (console_input_is_active()) {
+        if (c != 0) {
+            console_push_input(c);
+        }
+        return;
+    }
+
     if (g_ctrl_pressed && c == 'c') {
         shell_request_stop();
         return;
@@ -44,4 +52,3 @@ void keyboard_handle_irq(void) {
         shell_handle_char(c);
     }
 }
-
