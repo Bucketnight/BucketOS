@@ -61,3 +61,15 @@ void *kmalloc(size_t size) {
     g_memory_info.heap_current = end;
     return (void *)start;
 }
+
+void *kmalloc_aligned(size_t size, size_t alignment) {
+    const uintptr_t start = align_up(g_memory_info.heap_current, (uintptr_t)alignment);
+    const uintptr_t end = start + size;
+
+    if (end > g_memory_info.heap_end) {
+        return 0;
+    }
+
+    g_memory_info.heap_current = end;
+    return (void *)start;
+}
