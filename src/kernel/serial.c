@@ -1,3 +1,4 @@
+#include "bucketos/config.h"
 #include "bucketos/ports.h"
 #include "bucketos/serial.h"
 
