@@ -1,24 +1,251 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Hello!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BucketOS</title>
     <style>
-        body {
+        :root {
+            --bg: #2a2a2a;
+            --accent: #00ff9d;
+            --text-light: #bbbbbb;
+        }
+        
+        * {
             margin: 0;
-            height: 100vh;
-            display: flex;
-            justify-content: center;  /* horizontal */
-            align-items: center;      /* vertical */
-            font-family: Arial, sans-serif;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: var(--bg);
+            color: white;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow-x: hidden;
         }
 
-        h1 {
+        /* ====================== HOME PAGE ====================== */
+        .home {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             text-align: center;
+        }
+
+        .logo-home {
+            max-width: 820px;
+            width: 820px;
+            opacity: 0;
+            transform: translateY(120px);
+            transition: opacity 1.4s ease-out, transform 1.4s ease-out;
+            margin-bottom: 2rem;
+            cursor: pointer;
+        }
+        
+        .logo-home.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tagline {
+            font-size: 1.45rem;
+            color: var(--text-light);
+            max-width: 800px;
+            margin-bottom: 3rem;
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 1.3s ease-out 0.6s, transform 1.3s ease-out 0.6s;
+        }
+        
+        .tagline.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 1.3s ease-out 1.2s, transform 1.3s ease-out 1.2s;
+        }
+        
+        .buttons.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .btn {
+            padding: 14px 34px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            min-width: 190px;
+        }
+        
+        .btn-about {
+            background: transparent;
+            color: white;
+            border: 2px solid #666;
+        }
+        
+        .btn-github {
+            background: var(--accent);
+            color: #000;
+        }
+        
+        .btn:hover {
+            transform: translateY(-4px);
+        }
+
+        /* ====================== ABOUT PAGE ====================== */
+        .about-page {
+            display: none;
+            min-height: 100vh;
+            padding: 3rem 5%;
+        }
+        
+        .about-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4rem;
+        }
+        
+        .logo-about {
+            max-width: 180px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .logo-about:hover {
+            transform: scale(1.05);
+        }
+
+        .about-content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .about-content h1 {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .about-content h2 {
+            font-size: 2rem;
+            color: var(--accent);
+            margin: 3rem 0 1.2rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .feature {
+            background: #222;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            color: var(--text-light);
         }
     </style>
 </head>
 <body>
 
-    <h1>Hello! Thanks for visiting my website! The project is still under development. If you want to contribute, feel free!</h1>
+    <!-- ==================== HOME PAGE ==================== -->
+    <div id="home" class="home">
+        <img src="logo.png" alt="BucketOS" class="logo-home" id="logoHome">
+        <p class="tagline" id="tagline">An operating system that is only made for advanced users.</p>
+
+        <div class="buttons" id="buttons">
+            <a href="#" onclick="showAbout()" class="btn btn-about">About</a>
+            <a href="https://github.com/Bucketnight/BucketOS" target="_blank" class="btn btn-github">View on GitHub</a>
+        </div>
+    </div>
+
+    <!-- ==================== ABOUT PAGE ==================== -->
+    <div id="aboutPage" class="about-page">
+        <div class="about-header">
+            <img src="logo.png" alt="BucketOS" class="logo-about" onclick="showHome()">
+        </div>
+        
+        <div class="about-content">
+            <h1>About the project</h1>
+            <p style="font-size: 1.25rem; color: #cccccc; line-height: 1.7;">
+                This is a hobby operating system that I made.
+            </p>
+
+            <h2>Features</h2>
+            <div class="features">
+                <div class="feature">Scheduler</div>
+                <div class="feature">Syscalls</div>
+                <div class="feature">Mouse & Keyboard</div>
+                <div class="feature">Framebuffer</div>
+                <div class="feature">ELF executing</div>
+                <div class="feature">GDT & IDT</div>
+                <div class="feature">Init support</div>
+                <div class="feature">Filesystem & Virtual filesystem</div>
+            </div>
+
+            <p style="margin-top: 3rem; font-size: 1.15rem;">
+                <strong>LICENSE:</strong> MIT LICENSE
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const home = document.getElementById('home');
+        const aboutPage = document.getElementById('aboutPage');
+        const logoHome = document.getElementById('logoHome');
+        const tagline = document.getElementById('tagline');
+        const buttons = document.getElementById('buttons');
+
+        // Animation for home page
+        function animateHome() {
+            setTimeout(() => {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            logoHome.classList.add('visible');
+                            setTimeout(() => tagline.classList.add('visible'), 600);
+                            setTimeout(() => buttons.classList.add('visible'), 1200);
+                        }
+                    });
+                }, { threshold: 0.15 });
+                
+                observer.observe(logoHome);
+            }, 150);
+        }
+
+        // Show About Page
+        function showAbout() {
+            home.style.display = 'none';
+            aboutPage.style.display = 'block';
+        }
+
+        // Return to Home Page
+        function showHome() {
+            aboutPage.style.display = 'none';
+            home.style.display = 'flex';
+            // Re-trigger animation when returning
+            logoHome.classList.remove('visible');
+            tagline.classList.remove('visible');
+            buttons.classList.remove('visible');
+            setTimeout(() => animateHome(), 100);
+        }
+
+        // Initialize
+        window.onload = () => {
+            animateHome();
+        };
+    </script>
 </body>
 </html>
