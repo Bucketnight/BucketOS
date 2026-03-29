@@ -1,3 +1,12 @@
+// syscall.h: Kernel syscall numbers and ABI constants shared with userspace.
+
+/*
+ * Reading guide:
+ * - Purpose: syscall.h: Kernel syscall numbers and ABI constants shared with userspace.
+ * - Start reading at: syscall_dispatch
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_SYSCALL_H
 #define BUCKETOS_SYSCALL_H
 
