@@ -1,3 +1,12 @@
+// paging.h: Paging API and user-space mapping description.
+
+/*
+ * Reading guide:
+ * - Purpose: paging.h: Paging API and user-space mapping description.
+ * - Start reading at: paging_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_PAGING_H
 #define BUCKETOS_PAGING_H
 
