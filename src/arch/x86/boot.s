@@ -1,3 +1,10 @@
+# boot.s: Multiboot header and early x86 entry stub (sets up stack, calls kernel_main).
+
+# Reading guide:
+# - Purpose: boot.s: Multiboot header and early x86 entry stub (sets up stack, calls kernel_main).
+# - Start reading at: stack_bottom
+# - Tip: This runs very early; assume interrupts off and a minimal environment.
+
 .section .multiboot
 .align 4
 .long 0x1BADB002
