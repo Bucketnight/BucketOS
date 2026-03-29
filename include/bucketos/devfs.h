@@ -1,3 +1,12 @@
+// devfs.h: devfs API (device nodes like /dev/null, /dev/console, /dev/fb0, /dev/mouse0).
+
+/*
+ * Reading guide:
+ * - Purpose: devfs.h: devfs API (device nodes like /dev/null, /dev/console, /dev/fb0, /dev/mouse0).
+ * - Start reading at: devfs_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_DEVFS_H
 #define BUCKETOS_DEVFS_H
 
