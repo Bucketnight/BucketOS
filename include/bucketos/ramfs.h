@@ -1,3 +1,12 @@
+// ramfs.h: ramfs API (in-memory filesystem used for initrd contents).
+
+/*
+ * Reading guide:
+ * - Purpose: ramfs.h: ramfs API (in-memory filesystem used for initrd contents).
+ * - Start reading at: void
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_RAMFS_H
 #define BUCKETOS_RAMFS_H
 
