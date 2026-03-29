@@ -1,3 +1,12 @@
+// panic.h: Kernel panic API (fatal error reporting and halt/reboot policy).
+
+/*
+ * Reading guide:
+ * - Purpose: panic.h: Kernel panic API (fatal error reporting and halt/reboot policy).
+ * - Start reading at: panic
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_PANIC_H
 #define BUCKETOS_PANIC_H
 
