@@ -1,3 +1,12 @@
+// memory.h: Memory info and kernel heap allocator (kmalloc) API.
+
+/*
+ * Reading guide:
+ * - Purpose: memory.h: Memory info and kernel heap allocator (kmalloc) API.
+ * - Start reading at: memory_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_MEMORY_H
 #define BUCKETOS_MEMORY_H
 
