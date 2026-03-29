@@ -1,3 +1,12 @@
+// paging.c: Paging implementation (identity map + initial user image/stack mapping).
+
+/*
+ * Reading guide:
+ * - Purpose: paging.c: Paging implementation (identity map + initial user image/stack mapping).
+ * - Start reading at: paging_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/paging.h"
 #include "bucketos/memory.h"
 #include "bucketos/panic.h"
@@ -12,7 +21,9 @@ enum {
     PAGE_WRITABLE = 0x002u,
     PAGE_USER = 0x004u,
     MIN_IDENTITY_MAP_BYTES = 16u * 1024u * 1024u,
-    USER_CODE_VIRTUAL_BASE = 0x00400000u,
+    USER_IMAGE_BASE = 0x00400000u,
+    USER_IMAGE_PAGES = 16u,
+    USER_STACK_PAGES = 4u,
     USER_STACK_TOP = 0x00800000u
 };
 
@@ -41,7 +52,7 @@ static uint32_t *paging_allocate_table(void) {
     return table;
 }
 
-static uint32_t *paging_table_for(uintptr_t virtual_address, bool create) {
+static uint32_t *paging_table_for(uintptr_t virtual_address, bool create, uint32_t directory_flags) {
     const uint32_t directory_index = (uint32_t)(virtual_address >> 22);
 
     if ((g_page_directory[directory_index] & PAGE_PRESENT) == 0u) {
@@ -51,19 +62,28 @@ static uint32_t *paging_table_for(uintptr_t virtual_address, bool create) {
 
         uint32_t *const table = paging_allocate_table();
         g_page_directory[directory_index] =
-            ((uintptr_t)table & 0xFFFFF000u) | PAGE_PRESENT | PAGE_WRITABLE;
+            ((uintptr_t)table & 0xFFFFF000u) | PAGE_PRESENT | PAGE_WRITABLE | directory_flags;
         return table;
     }
 
+    g_page_directory[directory_index] |= directory_flags;
     return (uint32_t *)(uintptr_t)(g_page_directory[directory_index] & 0xFFFFF000u);
 }
 
+
 static void paging_map_page(uintptr_t virtual_address, uintptr_t physical_address, uint32_t flags) {
-    uint32_t *const table = paging_table_for(virtual_address, true);
+    uint32_t directory_flags = 0;
+
+    if ((flags & PAGE_USER) != 0u) {
+        directory_flags |= PAGE_USER;
+    }
+
+    uint32_t *const table = paging_table_for(virtual_address, true, directory_flags);
     const uint32_t table_index = (uint32_t)((virtual_address >> 12) & 0x3FFu);
 
     table[table_index] = (uint32_t)(physical_address & 0xFFFFF000u) | flags | PAGE_PRESENT;
 }
+
 
 static void paging_identity_map_range(uintptr_t start, uintptr_t end, uint32_t flags) {
     uintptr_t address = align_down(start, PAGE_SIZE);
@@ -115,25 +135,36 @@ const user_space_mapping_t *paging_user_space(void) {
 }
 
 void paging_map_initial_user_space(void) {
-    void *const code_page = kmalloc(PAGE_SIZE);
-    void *const stack_page = kmalloc(PAGE_SIZE);
+    g_user_space.image_base_virtual = USER_IMAGE_BASE;
+    g_user_space.image_size = USER_IMAGE_PAGES * PAGE_SIZE;
+    g_user_space.stack_bottom_virtual = USER_STACK_TOP - USER_STACK_PAGES * PAGE_SIZE;
+    g_user_space.stack_top_virtual = USER_STACK_TOP;
 
-    if (code_page == 0 || stack_page == 0) {
-        panic("paging: unable to allocate initial user pages");
+    for (size_t page = 0; page < USER_IMAGE_PAGES; ++page) {
+        void *const physical_page = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
+        if (physical_page == 0) {
+            panic("paging: unable to allocate initial user image pages");
+        }
+
+        memset(physical_page, 0, PAGE_SIZE);
+        paging_map_page(
+            USER_IMAGE_BASE + page * PAGE_SIZE,
+            (uintptr_t)physical_page,
+            PAGE_WRITABLE | PAGE_USER);
     }
 
-    memset(code_page, 0, PAGE_SIZE);
-    memset(stack_page, 0, PAGE_SIZE);
+    for (size_t page = 0; page < USER_STACK_PAGES; ++page) {
+        void *const physical_page = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
+        if (physical_page == 0) {
+            panic("paging: unable to allocate initial user stack pages");
+        }
 
-    g_user_space.code_virtual = USER_CODE_VIRTUAL_BASE;
-    g_user_space.code_physical = (uintptr_t)code_page;
-    g_user_space.stack_bottom_virtual = USER_STACK_TOP - PAGE_SIZE;
-    g_user_space.stack_top_virtual = USER_STACK_TOP;
-    g_user_space.stack_physical = (uintptr_t)stack_page;
-
-    paging_map_page(g_user_space.code_virtual, g_user_space.code_physical, PAGE_WRITABLE | PAGE_USER);
-    paging_map_page(
-        g_user_space.stack_bottom_virtual, g_user_space.stack_physical, PAGE_WRITABLE | PAGE_USER);
+        memset(physical_page, 0, PAGE_SIZE);
+        paging_map_page(
+            g_user_space.stack_bottom_virtual + page * PAGE_SIZE,
+            (uintptr_t)physical_page,
+            PAGE_WRITABLE | PAGE_USER);
+    }
 
     __asm__ volatile ("mov %0, %%cr3" : : "r"(g_page_directory) : "memory");
 }

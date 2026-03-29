@@ -1,3 +1,12 @@
+// exec.c: ELF user program loader and user stack setup for exec(path, argv).
+
+/*
+ * Reading guide:
+ * - Purpose: exec.c: ELF user program loader and user stack setup for exec(path, argv).
+ * - Start reading at: exec_load
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/elf.h"
 #include "bucketos/exec.h"
 #include "bucketos/gdt.h"

@@ -1,3 +1,12 @@
+// pit.c: PIT initialization and IRQ0 tick accounting.
+
+/*
+ * Reading guide:
+ * - Purpose: pit.c: PIT initialization and IRQ0 tick accounting.
+ * - Start reading at: pit_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/pit.h"
 #include "bucketos/ports.h"
 

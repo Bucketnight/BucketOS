@@ -1,3 +1,12 @@
+// kernel.c: kernel_main and early init sequence (memory, paging, devices, shell).
+
+/*
+ * Reading guide:
+ * - Purpose: kernel.c: kernel_main and early init sequence (memory, paging, devices, shell).
+ * - Start reading at: kernel_main
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/console.h"
 #include "bucketos/interrupts.h"
 #include "bucketos/kernel.h"

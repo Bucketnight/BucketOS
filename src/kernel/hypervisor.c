@@ -1,3 +1,12 @@
+// hypervisor.c: Hypervisor detection implementation (reads vendor id string).
+
+/*
+ * Reading guide:
+ * - Purpose: hypervisor.c: Hypervisor detection implementation (reads vendor id string).
+ * - Start reading at: hypervisor_detect
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/hypervisor.h"
 #include "bucketos/cpuid.h"
 #include "bucketos/string.h"

@@ -1,3 +1,12 @@
+// vfs.c: Minimal VFS implementation (mount / and /dev; path normalization).
+
+/*
+ * Reading guide:
+ * - Purpose: vfs.c: Minimal VFS implementation (mount / and /dev; path normalization).
+ * - Start reading at: vfs_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/devfs.h"
 #include "bucketos/ramfs.h"
 #include "bucketos/string.h"

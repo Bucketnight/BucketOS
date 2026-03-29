@@ -1,3 +1,12 @@
+// panic.c: Kernel panic implementation (prints reason and stops the system).
+
+/*
+ * Reading guide:
+ * - Purpose: panic.c: Kernel panic implementation (prints reason and stops the system).
+ * - Start reading at: panic
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/panic.h"
 #include "bucketos/ports.h"
 #include "bucketos/print.h"

@@ -1,3 +1,12 @@
+// terminal.c: Terminal implementation (VGA + framebuffer glyph rendering + cursor/scroll).
+
+/*
+ * Reading guide:
+ * - Purpose: terminal.c: Terminal implementation (VGA + framebuffer glyph rendering + cursor/scroll).
+ * - Start reading at: terminal_configure_framebuffer
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/terminal.h"
 #include "bucketos/framebuffer.h"
 #include "bucketos/ports.h"

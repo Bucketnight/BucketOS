@@ -1,3 +1,12 @@
+// framebuffer.c: Framebuffer initialization from multiboot and basic drawing helpers.
+
+/*
+ * Reading guide:
+ * - Purpose: framebuffer.c: Framebuffer initialization from multiboot and basic drawing helpers.
+ * - Start reading at: framebuffer_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/framebuffer.h"
 #include "bucketos/string.h"
 

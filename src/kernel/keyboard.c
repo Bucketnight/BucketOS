@@ -1,3 +1,12 @@
+// keyboard.c: PS/2 keyboard IRQ handler (scan code -> ASCII; feeds console/shell).
+
+/*
+ * Reading guide:
+ * - Purpose: keyboard.c: PS/2 keyboard IRQ handler (scan code -> ASCII; feeds console/shell).
+ * - Start reading at: keyboard_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/console.h"
 #include "bucketos/keyboard.h"
 #include "bucketos/ports.h"

@@ -1,3 +1,12 @@
+// ports.c: Port I/O implementation wrappers.
+
+/*
+ * Reading guide:
+ * - Purpose: ports.c: Port I/O implementation wrappers.
+ * - Start reading at: inb
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/ports.h"
 
 uint8_t inb(uint16_t port) {

@@ -1,3 +1,12 @@
+// print.c: Kernel printing implementation (routes through terminal/serial as configured).
+
+/*
+ * Reading guide:
+ * - Purpose: print.c: Kernel printing implementation (routes through terminal/serial as configured).
+ * - Start reading at: print_char
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/print.h"
 #include "bucketos/serial.h"
 #include "bucketos/terminal.h"

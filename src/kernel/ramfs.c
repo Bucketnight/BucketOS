@@ -1,3 +1,12 @@
+// ramfs.c: ramfs implementation (simple tree + file blobs loaded from initrd tar).
+
+/*
+ * Reading guide:
+ * - Purpose: ramfs.c: ramfs implementation (simple tree + file blobs loaded from initrd tar).
+ * - Start reading at: ramfs_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/ramfs.h"
 #include "bucketos/memory.h"
 #include "bucketos/string.h"
@@ -213,29 +222,71 @@ static bool tar_header_empty(const tar_header_t *header) {
     return true;
 }
 
-static void tar_build_path(const tar_header_t *header, char *path, size_t path_size) {
-    size_t offset = 0;
-    path[offset++] = '/';
+static void tar_append_component(char *path, size_t path_size, size_t *offset, const char *component) {
+    const size_t component_len = strlen(component);
 
-    if (header->prefix[0] != '\0') {
-        size_t prefix_len = strlen(header->prefix);
-        if (offset + prefix_len < path_size) {
-            memcpy(path + offset, header->prefix, prefix_len);
-            offset += prefix_len;
-            path[offset++] = '/';
-        }
-    }
-
-    const size_t name_len = strlen(header->name);
-    if (offset + name_len >= path_size) {
-        path[0] = '/';
-        path[1] = '\0';
+    if (component_len == 0 || (component_len == 1 && component[0] == '.')) {
         return;
     }
 
-    memcpy(path + offset, header->name, name_len);
-    offset += name_len;
+    if (*offset > 1) {
+        if (*offset + 1 >= path_size) {
+            return;
+        }
+        path[(*offset)++] = '/';
+    }
+
+    if (*offset + component_len >= path_size) {
+        return;
+    }
+
+    memcpy(path + *offset, component, component_len);
+    *offset += component_len;
+    path[*offset] = '\0';
+}
+
+static void tar_build_path(const tar_header_t *header, char *path, size_t path_size) {
+    size_t offset = 0;
+    path[offset++] = '/';
     path[offset] = '\0';
+
+    if (header->prefix[0] != '\0') {
+        char prefix_copy[sizeof(header->prefix) + 1];
+        memcpy(prefix_copy, header->prefix, sizeof(header->prefix));
+        prefix_copy[sizeof(header->prefix)] = '\0';
+
+        char *component = prefix_copy;
+        while (*component != '\0') {
+            char *next = component;
+            while (*next != '\0' && *next != '/') {
+                ++next;
+            }
+            if (*next == '/') {
+                *next++ = '\0';
+            }
+            tar_append_component(path, path_size, &offset, component);
+            component = next;
+        }
+    }
+
+    {
+        char name_copy[sizeof(header->name) + 1];
+        memcpy(name_copy, header->name, sizeof(header->name));
+        name_copy[sizeof(header->name)] = '\0';
+
+        char *component = name_copy;
+        while (*component != '\0') {
+            char *next = component;
+            while (*next != '\0' && *next != '/') {
+                ++next;
+            }
+            if (*next == '/') {
+                *next++ = '\0';
+            }
+            tar_append_component(path, path_size, &offset, component);
+            component = next;
+        }
+    }
 
     if (offset > 1 && path[offset - 1] == '/') {
         path[offset - 1] = '\0';

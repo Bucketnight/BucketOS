@@ -1,3 +1,12 @@
+// interrupts.c: Interrupt subsystem implementation (PIC/IRQ setup and dispatch).
+
+/*
+ * Reading guide:
+ * - Purpose: interrupts.c: Interrupt subsystem implementation (PIC/IRQ setup and dispatch).
+ * - Start reading at: interrupts_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/gdt.h"
 #include "bucketos/interrupts.h"
 #include "bucketos/keyboard.h"

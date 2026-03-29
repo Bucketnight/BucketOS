@@ -1,3 +1,12 @@
+// syscall.c: Syscall dispatcher and implementations (write/open/read/close + fb + mouse).
+
+/*
+ * Reading guide:
+ * - Purpose: syscall.c: Syscall dispatcher and implementations (write/open/read/close + fb + mouse).
+ * - Start reading at: syscall_reset_process
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/console.h"
 #include "bucketos/framebuffer.h"
 #include "bucketos/gdt.h"

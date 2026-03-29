@@ -1,3 +1,12 @@
+// devfs.c: devfs implementation (mountable device filesystem).
+
+/*
+ * Reading guide:
+ * - Purpose: devfs.c: devfs implementation (mountable device filesystem).
+ * - Start reading at: devfs_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/devfs.h"
 #include "bucketos/print.h"
 #include "bucketos/string.h"
@@ -8,7 +17,9 @@ typedef struct {
 
 static const devfs_entry_t g_entries[] = {
     { "null" },
-    { "console" }
+    { "console" },
+    { "fb0" },
+    { "mouse0" }
 };
 
 void devfs_initialize(void) {
@@ -48,6 +59,18 @@ bool devfs_read(const char *path, const char **data, size_t *size) {
 
     if (strcmp(name, "console") == 0) {
         *data = "console device";
+        *size = strlen(*data);
+        return true;
+    }
+
+    if (strcmp(name, "fb0") == 0) {
+        *data = "framebuffer device";
+        *size = strlen(*data);
+        return true;
+    }
+
+    if (strcmp(name, "mouse0") == 0) {
+        *data = "mouse device";
         *size = strlen(*data);
         return true;
     }

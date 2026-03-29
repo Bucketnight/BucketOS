@@ -1,3 +1,12 @@
+// string.c: Implementations of memset/memcpy/strcmp/strlen/etc.
+
+/*
+ * Reading guide:
+ * - Purpose: string.c: Implementations of memset/memcpy/strcmp/strlen/etc.
+ * - Start reading at: strlen
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/string.h"
 
 void *memcpy(void *dest, const void *src, size_t count) {

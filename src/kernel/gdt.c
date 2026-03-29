@@ -1,3 +1,12 @@
+// gdt.c: GDT + TSS implementation (segment descriptors and ring 3 transitions).
+
+/*
+ * Reading guide:
+ * - Purpose: gdt.c: GDT + TSS implementation (segment descriptors and ring 3 transitions).
+ * - Start reading at: tss_set_kernel_stack
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/gdt.h"
 
 typedef struct {

@@ -1,3 +1,12 @@
+// idt.c: IDT descriptor table setup and ISR gate registration.
+
+/*
+ * Reading guide:
+ * - Purpose: idt.c: IDT descriptor table setup and ISR gate registration.
+ * - Start reading at: idt_set_gate
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/idt.h"
 #include "bucketos/ports.h"
 #include "bucketos/string.h"

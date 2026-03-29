@@ -1,3 +1,12 @@
+// memory.c: Multiboot memory parsing + a tiny kernel heap allocator.
+
+/*
+ * Reading guide:
+ * - Purpose: memory.c: Multiboot memory parsing + a tiny kernel heap allocator.
+ * - Start reading at: memory_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/memory.h"
 #include "bucketos/string.h"
 

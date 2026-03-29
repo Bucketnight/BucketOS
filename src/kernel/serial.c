@@ -1,3 +1,12 @@
+// serial.c: Serial logging implementation (16550-compatible COM1).
+
+/*
+ * Reading guide:
+ * - Purpose: serial.c: Serial logging implementation (16550-compatible COM1).
+ * - Start reading at: serial_initialize
+ * - Tip: Anything reachable from interrupts must stay simple (no blocking; be careful with shared state).
+ */
+
 #include "bucketos/config.h"
 #include "bucketos/ports.h"
 #include "bucketos/serial.h"
