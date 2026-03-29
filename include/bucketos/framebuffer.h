@@ -1,3 +1,12 @@
+// framebuffer.h: Framebuffer info and kernel drawing primitives (putpixel/fill_rect).
+
+/*
+ * Reading guide:
+ * - Purpose: framebuffer.h: Framebuffer info and kernel drawing primitives (putpixel/fill_rect).
+ * - Start reading at: framebuffer_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_FRAMEBUFFER_H
 #define BUCKETOS_FRAMEBUFFER_H
 
