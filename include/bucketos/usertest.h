@@ -1,9 +1,15 @@
+// usertest.h: User test loader API (loads and runs a test program in ring 3).
+
+/*
+ * Reading guide:
+ * - Purpose: usertest.h: User test loader API (loads and runs a test program in ring 3).
+ * - Start reading at: usertest_load
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_USERTEST_H
 #define BUCKETOS_USERTEST_H
 
-#include "bucketos/common.h"
-
-void usertest_initialize(void);
-uint32_t usertest_run(void);
+bool usertest_load(void);
 
 #endif
