@@ -1,3 +1,12 @@
+// scheduler.h: Minimal scheduler API (yield/round-robin bookkeeping).
+
+/*
+ * Reading guide:
+ * - Purpose: scheduler.h: Minimal scheduler API (yield/round-robin bookkeeping).
+ * - Start reading at: scheduler_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_SCHEDULER_H
 #define BUCKETOS_SCHEDULER_H
 
