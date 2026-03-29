@@ -1,3 +1,12 @@
+// idt.h: IDT setup API.
+
+/*
+ * Reading guide:
+ * - Purpose: idt.h: IDT setup API.
+ * - Start reading at: idt_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_IDT_H
 #define BUCKETOS_IDT_H
 
