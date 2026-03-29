@@ -1,3 +1,12 @@
+// elf.h: Minimal ELF32 structures/constants used by the exec loader.
+
+/*
+ * Reading guide:
+ * - Purpose: elf.h: Minimal ELF32 structures/constants used by the exec loader.
+ * - Start reading at: (top of file)
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_ELF_H
 #define BUCKETOS_ELF_H
 
