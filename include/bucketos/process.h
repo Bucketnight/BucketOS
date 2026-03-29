@@ -1,3 +1,12 @@
+// process.h: Process/task structures, user register snapshots, and fd table types.
+
+/*
+ * Reading guide:
+ * - Purpose: process.h: Process/task structures, user register snapshots, and fd table types.
+ * - Start reading at: process_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_PROCESS_H
 #define BUCKETOS_PROCESS_H
 
