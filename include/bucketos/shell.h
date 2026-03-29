@@ -1,3 +1,12 @@
+// shell.h: Kernel shell API (prompt + input handling).
+
+/*
+ * Reading guide:
+ * - Purpose: shell.h: Kernel shell API (prompt + input handling).
+ * - Start reading at: shell_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_SHELL_H
 #define BUCKETOS_SHELL_H
 
