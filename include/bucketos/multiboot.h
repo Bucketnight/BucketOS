@@ -1,3 +1,12 @@
+// multiboot.h: Multiboot1 structures/constants used at boot.
+
+/*
+ * Reading guide:
+ * - Purpose: multiboot.h: Multiboot1 structures/constants used at boot.
+ * - Start reading at: (top of file)
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_MULTIBOOT_H
 #define BUCKETOS_MULTIBOOT_H
 
