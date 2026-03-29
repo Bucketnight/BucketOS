@@ -20,6 +20,8 @@ while IFS= read -r line; do
 done < "$input"
 
 cat > "$output" <<EOF
+// config.h: Generated build configuration values (from Kconfig/.config).
+
 #ifndef BUCKETOS_CONFIG_H
 #define BUCKETOS_CONFIG_H
 
