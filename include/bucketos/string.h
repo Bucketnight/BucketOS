@@ -1,3 +1,12 @@
+// string.h: Tiny libc-like string/memory routines used in freestanding code.
+
+/*
+ * Reading guide:
+ * - Purpose: string.h: Tiny libc-like string/memory routines used in freestanding code.
+ * - Start reading at: strlen
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_STRING_H
 #define BUCKETOS_STRING_H
 
