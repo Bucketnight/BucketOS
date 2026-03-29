@@ -1,3 +1,12 @@
+// vfs.h: Minimal VFS layer API (mount points + path traversal + list/read).
+
+/*
+ * Reading guide:
+ * - Purpose: vfs.h: Minimal VFS layer API (mount points + path traversal + list/read).
+ * - Start reading at: void
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_VFS_H
 #define BUCKETOS_VFS_H
 
