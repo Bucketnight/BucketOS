@@ -1,3 +1,12 @@
+// ports.h: Port I/O helpers (inb/outb/etc).
+
+/*
+ * Reading guide:
+ * - Purpose: ports.h: Port I/O helpers (inb/outb/etc).
+ * - Start reading at: inb
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_PORTS_H
 #define BUCKETOS_PORTS_H
 
