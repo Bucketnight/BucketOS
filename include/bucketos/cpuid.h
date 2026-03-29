@@ -1,4 +1,11 @@
-/* cpuid.h: detects hpervisor or real hardware */
+// cpuid.h: Small CPUID helper for x86 feature/vendor queries.
+/*
+ * Reading guide:
+ * - Purpose: Exposes a tiny `cpuid()` wrapper so the kernel can query CPU features and vendor IDs.
+ * - Start reading at: cpuid
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_CPUID_H
 #define BUCKETOS_CPUID_H
 
