@@ -1,3 +1,12 @@
+// print.h: Kernel printing helpers (strings/ints/hex; used by early boot + shell).
+
+/*
+ * Reading guide:
+ * - Purpose: print.h: Kernel printing helpers (strings/ints/hex; used by early boot + shell).
+ * - Start reading at: print_char
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_PRINT_H
 #define BUCKETOS_PRINT_H
 
