@@ -1,3 +1,10 @@
+# isr_stubs.s: x86 ISR entry stubs (save registers and call the common C handler).
+
+# Reading guide:
+# - Purpose: isr_stubs.s: x86 ISR entry stubs (save registers and call the common C handler).
+# - Start reading at: isr_common
+# - Tip: This runs very early; assume interrupts off and a minimal environment.
+
 .section .text
 
 .extern interrupt_dispatch
