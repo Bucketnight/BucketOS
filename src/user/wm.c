@@ -194,7 +194,7 @@ static void build_counter_label(char *out, unsigned int value) {
     }
     for (int i = 0; num[i] != '\0'; ++i) {
         out[pos++] = num[i];
-    }
+    } 
     out[pos] = '\0';
 }
 
@@ -311,7 +311,7 @@ static void fb_blit_glyph(
     for (int py = 0; py < FONT_HEIGHT; ++py) {
         const unsigned char row_bits = glyph[(unsigned int)py / 2u];
         for (int px = 0; px < FONT_WIDTH; ++px) {
-            const unsigned int bit_set = (row_bits & (unsigned char)(0x80u >> px)) != 0u;
+            const unsigned int bit_set = (row_bits & (unsigned char)(0x80u >> px)) != 0u; // papa
             pixels[py * FONT_WIDTH + px] = (unsigned int)(bit_set ? fg_color : bg_color);
         }
     }
