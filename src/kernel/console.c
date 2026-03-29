@@ -1,3 +1,5 @@
+// console.c: Kernel console implementation (input buffer + output to terminal/serial).
+
 #include "bucketos/console.h"
 #include "bucketos/print.h"
 #include "bucketos/process.h"
