@@ -1,3 +1,12 @@
+// exec.h: User program loader API (exec from initrd/ramfs into user mapping).
+
+/*
+ * Reading guide:
+ * - Purpose: exec.h: User program loader API (exec from initrd/ramfs into user mapping).
+ * - Start reading at: exec_load
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_EXEC_H
 #define BUCKETOS_EXEC_H
 
