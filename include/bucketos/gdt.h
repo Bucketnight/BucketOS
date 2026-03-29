@@ -1,3 +1,12 @@
+// gdt.h: GDT/TSS setup and helpers for entering/leaving ring 3.
+
+/*
+ * Reading guide:
+ * - Purpose: gdt.h: GDT/TSS setup and helpers for entering/leaving ring 3.
+ * - Start reading at: gdt_initialize
+ * - Tip: This is part of the public API; keep it stable and document any assumptions.
+ */
+
 #ifndef BUCKETOS_GDT_H
 #define BUCKETOS_GDT_H
 
