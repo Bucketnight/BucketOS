@@ -985,8 +985,7 @@ int main(int argc, char **argv) {
         if (!had_input && !cursor_moved && !need_redraw) {
             sys_yield();
         }
-    }
-
+    } // End of the code
     if (mouse_fd >= 0) {
         sys_close(mouse_fd);
     }
