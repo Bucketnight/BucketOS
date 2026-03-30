@@ -15,20 +15,24 @@ jobs:
 
       - name: Build and send Discord embed
         run: |
-          # Get changed files (limit 10)
-          FILES=$(jq -r '.commits[].modified[], .commits[].added[], .commits[].removed[]?' "$GITHUB_EVENT_PATH" | sort | uniq | head -n 10)
+          # Get changed files safely (limit 10)
+          FILES=$(jq -r '
+            .commits[]? 
+            | (.modified // []), (.added // []), (.removed // [])
+            | .[]
+          ' "$GITHUB_EVENT_PATH" | sort | uniq | head -n 10)
 
-          # Count changes
-          TOTAL_PLUS=$(jq '[.commits[].added[]?] | length' "$GITHUB_EVENT_PATH")
-          TOTAL_MINUS=$(jq '[.commits[].removed[]?] | length' "$GITHUB_EVENT_PATH")
+          # Count additions/removals safely
+          TOTAL_PLUS=$(jq '[.commits[]? | (.added // [])[]] | length' "$GITHUB_EVENT_PATH")
+          TOTAL_MINUS=$(jq '[.commits[]? | (.removed // [])[]] | length' "$GITHUB_EVENT_PATH")
 
-          # Safely format file list
+          # Format file list safely
           FILE_LIST=$(echo "$FILES" | sed 's/^/- /' | jq -Rs .)
 
-          # Safely format commit message
-          COMMIT_MSG=$(jq -r '.head_commit.message' "$GITHUB_EVENT_PATH" | jq -Rs .)
+          # Safe commit message (handles quotes/newlines)
+          COMMIT_MSG=$(jq -r '.head_commit.message // "No commit message"' "$GITHUB_EVENT_PATH" | jq -Rs .)
 
-          # Build JSON payload safely
+          # Build payload JSON safely
           jq -n \
             --arg repo "${{ github.repository }}" \
             --arg url "${{ github.event.head_commit.url }}" \
@@ -60,22 +64,22 @@ jobs:
                 },
                 {
                   name: "📁 Files Changed",
-                  value: $files
+                  value: ($files | fromjson | select(length > 0) // "No files detected")
                 },
                 {
                   name: "💬 Commit Message",
-                  value: $msg
+                  value: ($msg | fromjson)
                 }
               ],
               footer: {
                 text: "GitHub • Push Event"
               },
-              timestamp: now
+              timestamp: (now | todateiso8601)
             }]
           }' > payload.json
 
-          # Send to Discord
-          curl -s -o /dev/null -w "%{http_code}" \
+          # Send to Discord (shows HTTP status for debug)
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" \
             -H "Content-Type: application/json" \
             -X POST \
             -d @payload.json \
