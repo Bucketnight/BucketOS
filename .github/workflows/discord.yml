@@ -8,53 +8,75 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Send Discord Embed
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build and send Discord embed
         run: |
+          # Get changed files (limit 10)
           FILES=$(jq -r '.commits[].modified[], .commits[].added[], .commits[].removed[]?' "$GITHUB_EVENT_PATH" | sort | uniq | head -n 10)
 
-          ADDED=$(jq '[.commits[].added[]?] | length' "$GITHUB_EVENT_PATH")
-          REMOVED=$(jq '[.commits[].removed[]?] | length' "$GITHUB_EVENT_PATH")
-          MODIFIED=$(jq '[.commits[].modified[]?] | length' "$GITHUB_EVENT_PATH")
-
+          # Count changes
           TOTAL_PLUS=$(jq '[.commits[].added[]?] | length' "$GITHUB_EVENT_PATH")
           TOTAL_MINUS=$(jq '[.commits[].removed[]?] | length' "$GITHUB_EVENT_PATH")
 
-          curl -H "Content-Type: application/json" \
-          -X POST \
-          -d "{
-            \"embeds\": [{
-              \"title\": \"🚀 New Push to ${{ github.repository }}\",
-              \"url\": \"${{ github.event.head_commit.url }}\",
-              \"color\": 5814783,
-              \"author\": {
-                \"name\": \"${{ github.actor }}\",
-                \"icon_url\": \"https://github.com/${{ github.actor }}.png\"
+          # Safely format file list
+          FILE_LIST=$(echo "$FILES" | sed 's/^/- /' | jq -Rs .)
+
+          # Safely format commit message
+          COMMIT_MSG=$(jq -r '.head_commit.message' "$GITHUB_EVENT_PATH" | jq -Rs .)
+
+          # Build JSON payload safely
+          jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg url "${{ github.event.head_commit.url }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg files "$FILE_LIST" \
+            --arg msg "$COMMIT_MSG" \
+            --arg plus "$TOTAL_PLUS" \
+            --arg minus "$TOTAL_MINUS" \
+          '{
+            embeds: [{
+              title: ("🚀 New Push to " + $repo),
+              url: $url,
+              color: 5814783,
+              author: {
+                name: $actor,
+                icon_url: ("https://github.com/" + $actor + ".png")
               },
-              \"fields\": [
+              fields: [
                 {
-                  \"name\": \"📌 Branch\",
-                  \"value\": \"\`${{ github.ref_name }}\`\",
-                  \"inline\": true
+                  name: "📌 Branch",
+                  value: ("`" + $branch + "`"),
+                  inline: true
                 },
                 {
-                  \"name\": \"📊 Changes\",
-                  \"value\": \"+${TOTAL_PLUS} / -${TOTAL_MINUS}\",
-                  \"inline\": true
+                  name: "📊 Changes",
+                  value: ("+" + $plus + " / -" + $minus),
+                  inline: true
                 },
                 {
-                  \"name\": \"📁 Files Changed\",
-                  \"value\": \"$(echo \"$FILES\" | sed 's/^/- /' | tr '\n' '\\n')\"
+                  name: "📁 Files Changed",
+                  value: $files
                 },
                 {
-                  \"name\": \"💬 Commit Message\",
-                  \"value\": \"${{ github.event.head_commit.message }}\"
+                  name: "💬 Commit Message",
+                  value: $msg
                 }
               ],
-              \"footer\": {
-                \"text\": \"GitHub • Push Event\"
+              footer: {
+                text: "GitHub • Push Event"
               },
-              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              timestamp: now
             }]
-          }" \
-          ${{ secrets.DISCORD_WEBHOOK_URL }}
+          }' > payload.json
+
+          # Send to Discord
+          curl -s -o /dev/null -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d @payload.json \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
