@@ -51,7 +51,11 @@ void memory_initialize(const multiboot_info_t *multiboot) {
     }
 
     g_memory_info.heap_start = align_up((uintptr_t)&kernel_end, 4096u);
-    g_memory_info.heap_end = g_memory_info.heap_start + (1024u * 1024u);
+    // Keep a simple bump allocator for now, but make it large enough to hold:
+    // - initrd file blobs loaded into ramfs
+    // - initial user image/stack pages (mapped by paging.c)
+    // - misc kernel allocations
+    g_memory_info.heap_end = g_memory_info.heap_start + (32u * 1024u * 1024u);
     g_memory_info.heap_current = g_memory_info.heap_start;
 }
 
