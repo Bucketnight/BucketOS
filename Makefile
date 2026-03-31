@@ -23,6 +23,8 @@ INITRD := $(BUILD_DIR)/initrd.tar
 USERTEST_ELF := $(BUILD_DIR)/usertest.elf
 USERTEST_BIN := $(BUILD_DIR)/usertest.bin
 GENERATED_CONFIG := include/bucketos/config.h
+WALLPAPER_SRC := logo.png
+WALLPAPER_RAW := $(INITRD_ROOT)/usr/share/wallpaper.bgra
 
 SOURCES_C := \
 	src/kernel/kernel.c \
@@ -181,8 +183,11 @@ $(INITRD): $(USERTEST_BIN) $(USERSH_ELF) $(USERFBTEST_ELF) $(USERWM_ELF) | $(BUI
 	$(Q)mkdir -p $(INITRD_ROOT)
 	$(Q)cp -R initrd/. $(INITRD_ROOT)/
 	$(Q)mkdir -p $(INITRD_ROOT)/bin
+	$(Q)mkdir -p $(INITRD_ROOT)/usr/share
 	$(Q)cp $(USERTEST_ELF) $(INITRD_ROOT)/bin/usertest.elf
 	$(Q)cp $(USERSH_ELF) $(INITRD_ROOT)/bin/sh.elf
 	$(Q)cp $(USERFBTEST_ELF) $(INITRD_ROOT)/bin/fbtest.elf
 	$(Q)cp $(USERWM_ELF) $(INITRD_ROOT)/bin/wm.elf
+	$(Q)printf "WALL   %s\n" "$(WALLPAPER_RAW)"
+	$(Q)magick $(WALLPAPER_SRC) -alpha on -depth 8 BGRA:$(WALLPAPER_RAW)
 	$(Q)tar --format=ustar -cf $@ -C $(INITRD_ROOT) .
