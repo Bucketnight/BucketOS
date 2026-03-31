@@ -1,4 +1,4 @@
-name: Discord Notify
+name: Discord Advanced Notify
 
 on:
   push:
@@ -13,74 +13,91 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Build and send Discord embed
+      - name: Fetch commit data
         run: |
-          # Get changed files safely (limit 10)
-          FILES=$(jq -r '
-            .commits[]? 
-            | (.modified // []), (.added // []), (.removed // [])
-            | .[]
-          ' "$GITHUB_EVENT_PATH" | sort | uniq | head -n 10)
+          SHA=$(jq -r '.head_commit.id' "$GITHUB_EVENT_PATH")
 
-          # Count additions/removals safely
-          TOTAL_PLUS=$(jq '[.commits[]? | (.added // [])[]] | length' "$GITHUB_EVENT_PATH")
-          TOTAL_MINUS=$(jq '[.commits[]? | (.removed // [])[]] | length' "$GITHUB_EVENT_PATH")
+          RESPONSE=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/commits/$SHA)
 
-          # Format file list safely
-          FILE_LIST=$(echo "$FILES" | sed 's/^/- /' | jq -Rs .)
+          # Total stats
+          PLUS=$(echo "$RESPONSE" | jq '.stats.additions')
+          MINUS=$(echo "$RESPONSE" | jq '.stats.deletions')
 
-          # Safe commit message (handles quotes/newlines)
-          COMMIT_MSG=$(jq -r '.head_commit.message // "No commit message"' "$GITHUB_EVENT_PATH" | jq -Rs .)
+          # File list with per-file stats
+          FILES=$(echo "$RESPONSE" | jq -r '
+            .files[] |
+            "- \(.filename) (+\(.additions) / -\(.deletions))"
+          ' | head -n 10)
 
-          # Build payload JSON safely
+          # Diff preview (trimmed)
+          DIFF=$(echo "$RESPONSE" | jq -r '
+            .files[]?.patch // empty
+          ' | head -n 20)
+
+          # Save to env
+          echo "PLUS=$PLUS" >> $GITHUB_ENV
+          echo "MINUS=$MINUS" >> $GITHUB_ENV
+
+          echo "FILES<<EOF" >> $GITHUB_ENV
+          echo "$FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "DIFF<<EOF" >> $GITHUB_ENV
+          echo "$DIFF" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Send Discord embed
+        run: |
           jq -n \
             --arg repo "${{ github.repository }}" \
             --arg url "${{ github.event.head_commit.url }}" \
             --arg actor "${{ github.actor }}" \
             --arg branch "${{ github.ref_name }}" \
-            --arg files "$FILE_LIST" \
-            --arg msg "$COMMIT_MSG" \
-            --arg plus "$TOTAL_PLUS" \
-            --arg minus "$TOTAL_MINUS" \
+            --arg msg "${{ github.event.head_commit.message }}" \
+            --arg plus "${{ env.PLUS }}" \
+            --arg minus "${{ env.MINUS }}" \
+            --arg files "${{ env.FILES }}" \
+            --arg diff "${{ env.DIFF }}" \
           '{
             embeds: [{
-              title: ("🚀 New Push to " + $repo),
+              title: ("📦 " + $repo),
               url: $url,
-              color: 5814783,
+              color: 3066993,
               author: {
                 name: $actor,
                 icon_url: ("https://github.com/" + $actor + ".png")
               },
+              description: ("**" + $msg + "**"),
               fields: [
                 {
-                  name: "📌 Branch",
+                  name: "🌿 Branch",
                   value: ("`" + $branch + "`"),
                   inline: true
                 },
                 {
                   name: "📊 Changes",
-                  value: ("+" + $plus + " / -" + $minus),
+                  value: ("🟢 +" + $plus + " 🔴 -" + $minus),
                   inline: true
                 },
                 {
-                  name: "📁 Files Changed",
-                  value: ($files | fromjson | select(length > 0) // "No files detected")
+                  name: "📁 Files",
+                  value: $files
                 },
                 {
-                  name: "💬 Commit Message",
-                  value: ($msg | fromjson)
+                  name: "🧾 Diff Preview",
+                  value: ("```diff\n" + $diff + "\n```")
                 }
               ],
               footer: {
-                text: "GitHub • Push Event"
+                text: "GitHub • Commit"
               },
               timestamp: (now | todateiso8601)
             }]
           }' > payload.json
 
-          # Send to Discord (shows HTTP status for debug)
-          curl -s -o /dev/null -w "HTTP %{http_code}\n" \
-            -H "Content-Type: application/json" \
-            -X POST \
-            -d @payload.json \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d @payload.json \
+               ${{ secrets.DISCORD_WEBHOOK_URL }}
