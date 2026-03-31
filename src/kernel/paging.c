@@ -22,8 +22,12 @@ enum {
     PAGE_USER = 0x004u,
     MIN_IDENTITY_MAP_BYTES = 16u * 1024u * 1024u,
     USER_IMAGE_BASE = 0x00400000u,
-    USER_IMAGE_PAGES = 16u,
-    USER_STACK_PAGES = 4u,
+    // Userspace programs share a single pre-mapped "image" region in this toy kernel.  Keeping it
+    // larger makes room for real apps (like the userspace window server storing wallpaper pixels).
+    USER_IMAGE_PAGES = 256u,
+    // 4 pages (16 KiB) was enough for tiny demos, but the userspace window manager has large
+    // structs/arrays and needs a bigger stack.
+    USER_STACK_PAGES = 32u,
     USER_STACK_TOP = 0x00800000u
 };
 
