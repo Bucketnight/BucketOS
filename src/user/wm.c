@@ -11,11 +11,15 @@
 #include "user/lib.h"
 #include "user/mouse.h"
 
+#define WALLPAPER_PATH "/usr/share/wallpaper.bgra"
+
 enum {
     FONT_WIDTH = 8,
     FONT_HEIGHT = 16,
-    WINDOW_TEXT_MAX = 256,
-    WINDOW_MAX = 2,
+    WINDOW_TEXT_MAX = 4096,
+    WINDOW_MAX = 3,
+    WALLPAPER_WIDTH = 786,
+    WALLPAPER_HEIGHT = 103,
     CURSOR_WIDTH = 10,
     CURSOR_HEIGHT = 16,
     TASKBAR_HEIGHT = 28,
@@ -38,6 +42,13 @@ enum {
     COLOR_MENU_TEXT = 0x00FFFFFF
 };
 
+typedef enum {
+    WINDOW_ROLE_GENERIC = 0,
+    WINDOW_ROLE_VIEWER = 1,
+    WINDOW_ROLE_FILES = 2,
+    WINDOW_ROLE_NOTEPAD = 3
+} window_role_t;
+
 typedef struct {
     int x;
     int y;
@@ -46,9 +57,11 @@ typedef struct {
     const char *title;
     char text[WINDOW_TEXT_MAX];
     int text_length;
+    int text_cursor;
     int focused;
     int visible;
     int counter;
+    window_role_t role;
 } window_t;
 
 typedef struct {
@@ -57,6 +70,15 @@ typedef struct {
     int width;
     int height;
 } rect_t;
+
+enum {
+    DIRTY_RECTS_MAX = 16
+};
+
+typedef struct {
+    rect_t rects[DIRTY_RECTS_MAX];
+    int count;
+} dirty_list_t;
 
 static const unsigned char g_font[96][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
@@ -157,6 +179,10 @@ static const unsigned char g_font[96][8] = {
     { 0x00, 0x10, 0x38, 0x6C, 0xC6, 0xC6, 0xFE, 0x00 }
 };
 
+// Cached wallpaper pixels (generated from logo.png at build time).
+static unsigned int g_wallpaper_pixels[WALLPAPER_WIDTH * WALLPAPER_HEIGHT];
+static int g_wallpaper_loaded;
+
 static int clamp_int(int value, int min, int max) {
     if (value < min) {
         return min;
@@ -194,7 +220,7 @@ static void build_counter_label(char *out, unsigned int value) {
     }
     for (int i = 0; num[i] != '\0'; ++i) {
         out[pos++] = num[i];
-    } 
+    }
     out[pos] = '\0';
 }
 
@@ -282,6 +308,39 @@ static rect_t rect_clamp_to_screen(rect_t rect, const user_fb_info_t *info) {
     return rect;
 }
 
+static void dirty_reset(dirty_list_t *dirty) {
+    if (dirty == 0) {
+        return;
+    }
+    dirty->count = 0;
+}
+
+static void dirty_add(dirty_list_t *dirty, rect_t rect, const user_fb_info_t *info) {
+    if (dirty == 0) {
+        return;
+    }
+
+    rect = rect_clamp_to_screen(rect, info);
+    if (rect.width <= 0 || rect.height <= 0) {
+        return;
+    }
+
+    // Cheap merge: if it overlaps an existing rect, union it to keep the list small.
+    for (int i = 0; i < dirty->count; ++i) {
+        rect_t overlap;
+        if (rect_intersect(&dirty->rects[i], &rect, &overlap)) {
+            dirty->rects[i] = rect_union(dirty->rects[i], rect);
+            return;
+        }
+    }
+
+    if (dirty->count < DIRTY_RECTS_MAX) {
+        dirty->rects[dirty->count++] = rect;
+    } else {
+        dirty->rects[0] = rect_union(dirty->rects[0], rect);
+    }
+}
+
 static void fb_fill_rect(int fb, int x, int y, int width, int height, int color) {
     user_fb_rect_t rect;
     rect.x = x;
@@ -311,7 +370,7 @@ static void fb_blit_glyph(
     for (int py = 0; py < FONT_HEIGHT; ++py) {
         const unsigned char row_bits = glyph[(unsigned int)py / 2u];
         for (int px = 0; px < FONT_WIDTH; ++px) {
-            const unsigned int bit_set = (row_bits & (unsigned char)(0x80u >> px)) != 0u; 
+            const unsigned int bit_set = (row_bits & (unsigned char)(0x80u >> px)) != 0u;
             pixels[py * FONT_WIDTH + px] = (unsigned int)(bit_set ? fg_color : bg_color);
         }
     }
@@ -428,6 +487,34 @@ static rect_t window_widget_button_rect(const window_t *window) {
     return rect_make(window->x + 8, window->y + window->height - 28, 84, 20);
 }
 
+static rect_t window_body_rect(const window_t *window) {
+    return rect_make(window->x + 2, window->y + 24, window->width - 4, window->height - 26);
+}
+
+static rect_t window_content_rect(const window_t *window) {
+    rect_t body = window_body_rect(window);
+    if (window->role == WINDOW_ROLE_NOTEPAD) {
+        const int footer = 28;
+        body.height -= footer;
+        if (body.height < 0) {
+            body.height = 0;
+        }
+    }
+    return body;
+}
+
+static rect_t window_notepad_clear_button_rect(const window_t *window) {
+    return window_widget_button_rect(window);
+}
+
+static rect_t window_counter_label_rect(const window_t *window, unsigned int value) {
+    char counter_text[32];
+    build_counter_label(counter_text, value);
+    const int label_width = strlen(counter_text) * FONT_WIDTH;
+    const rect_t widget_rect = window_widget_button_rect(window);
+    return rect_make(widget_rect.x + widget_rect.width + 12, widget_rect.y + 2, label_width, FONT_HEIGHT);
+}
+
 static int first_visible_window(const window_t windows[WINDOW_MAX]) {
     for (int i = 0; i < WINDOW_MAX; ++i) {
         if (windows[i].visible) {
@@ -450,6 +537,332 @@ static void window_set_text(window_t *window, const char *text) {
 
     window->text[length] = '\0';
     window->text_length = length;
+    window->text_cursor = length;
+}
+
+static void notepad_load(window_t *window, const char *path) {
+    if (window == 0 || path == 0) {
+        return;
+    }
+
+    const int fd = sys_open(path);
+    if (fd < 0) {
+        window_set_text(window, "");
+        return;
+    }
+
+    int pos = 0;
+    while (pos + 1 < WINDOW_TEXT_MAX) {
+        const int read_count = sys_read(fd, window->text + pos, WINDOW_TEXT_MAX - 1 - pos);
+        if (read_count <= 0) {
+            break;
+        }
+        pos += read_count;
+    }
+
+    window->text[pos] = '\0';
+    window->text_length = pos;
+    window->text_cursor = pos;
+    sys_close(fd);
+}
+
+static void window_text_cursor_xy(const window_t *window, int cursor, int *out_x, int *out_y) {
+    if (window == 0 || out_x == 0 || out_y == 0) {
+        return;
+    }
+
+    if (cursor < 0) {
+        cursor = 0;
+    }
+    if (cursor > window->text_length) {
+        cursor = window->text_length;
+    }
+
+    int x = window->x + 8;
+    int y = window->y + 32;
+
+    for (int i = 0; i < cursor; ++i) {
+        const char c = window->text[i];
+        if (c == '\n') {
+            x = window->x + 8;
+            y += FONT_HEIGHT;
+        } else {
+            x += FONT_WIDTH;
+        }
+    }
+
+    *out_x = x;
+    *out_y = y;
+}
+
+enum {
+    FILES_PATH_MAX = 96,
+    FILES_LIST_MAX = 1024,
+    FILES_ENTRY_MAX = 48,
+    FILES_NAME_MAX = 48,
+    FILES_HEADER_LINES = 2
+};
+
+typedef struct {
+    char cwd[FILES_PATH_MAX];
+    int entry_count;
+    struct {
+        char name[FILES_NAME_MAX];
+        int is_dir;
+    } entries[FILES_ENTRY_MAX];
+} file_explorer_t;
+
+static void str_copy_limit(char *dst, int dst_size, const char *src) {
+    if (dst == 0 || dst_size <= 0) {
+        return;
+    }
+
+    int index = 0;
+    if (src != 0) {
+        while (src[index] != '\0' && index + 1 < dst_size) {
+            dst[index] = src[index];
+            ++index;
+        }
+    }
+
+    dst[index] = '\0';
+}
+
+static int text_append(char *dst, int dst_size, int pos, const char *src) {
+    if (dst == 0 || dst_size <= 0) {
+        return pos;
+    }
+
+    if (pos < 0) {
+        pos = 0;
+    }
+
+    if (src == 0) {
+        dst[pos < dst_size ? pos : (dst_size - 1)] = '\0';
+        return pos;
+    }
+
+    while (*src != '\0' && pos + 1 < dst_size) {
+        dst[pos++] = *src++;
+    }
+    dst[pos < dst_size ? pos : (dst_size - 1)] = '\0';
+    return pos;
+}
+
+static int path_is_root(const char *path) {
+    return path != 0 && path[0] == '/' && path[1] == '\0';
+}
+
+static void path_parent(char *out, int out_size, const char *path) {
+    if (out == 0 || out_size <= 0) {
+        return;
+    }
+
+    if (path == 0 || path[0] != '/' || path_is_root(path)) {
+        str_copy_limit(out, out_size, "/");
+        return;
+    }
+
+    int length = strlen(path);
+    while (length > 1 && path[length - 1] == '/') {
+        --length;
+    }
+
+    int slash = length - 1;
+    while (slash > 0 && path[slash] != '/') {
+        --slash;
+    }
+
+    if (slash <= 0) {
+        str_copy_limit(out, out_size, "/");
+        return;
+    }
+
+    int pos = 0;
+    while (pos + 1 < out_size && pos < slash) {
+        out[pos] = path[pos];
+        ++pos;
+    }
+    out[pos] = '\0';
+}
+
+static void path_join(char *out, int out_size, const char *base, const char *name) {
+    if (out == 0 || out_size <= 0) {
+        return;
+    }
+
+    if (base == 0 || base[0] != '/') {
+        base = "/";
+    }
+    if (name == 0) {
+        name = "";
+    }
+
+    int pos = 0;
+    pos = text_append(out, out_size, pos, base);
+
+    const int base_len = strlen(base);
+    const int need_slash = base_len > 0 && base[base_len - 1] != '/' && !path_is_root(base);
+    if (need_slash && pos + 1 < out_size) {
+        out[pos++] = '/';
+        out[pos] = '\0';
+    }
+
+    pos = text_append(out, out_size, pos, name);
+}
+
+static void viewer_show_file(window_t *viewer, const char *path) {
+    if (viewer == 0 || path == 0) {
+        return;
+    }
+
+    int pos = 0;
+    pos = text_append(viewer->text, WINDOW_TEXT_MAX, pos, "file: ");
+    pos = text_append(viewer->text, WINDOW_TEXT_MAX, pos, path);
+    pos = text_append(viewer->text, WINDOW_TEXT_MAX, pos, "\n\n");
+
+    const int fd = sys_open(path);
+    if (fd < 0) {
+        pos = text_append(viewer->text, WINDOW_TEXT_MAX, pos, "open failed\n");
+        viewer->text_length = pos;
+        return;
+    }
+
+    while (pos + 1 < WINDOW_TEXT_MAX) {
+        const int read_count = sys_read(fd, viewer->text + pos, WINDOW_TEXT_MAX - 1 - pos);
+        if (read_count <= 0) {
+            break;
+        }
+        pos += read_count;
+    }
+
+    viewer->text[pos] = '\0';
+    viewer->text_length = pos;
+    sys_close(fd);
+}
+
+static void files_refresh(file_explorer_t *files, window_t *files_window) {
+    if (files == 0 || files_window == 0) {
+        return;
+    }
+
+    char list[FILES_LIST_MAX];
+    if (sys_list(files->cwd, list, (int)sizeof(list)) < 0) {
+        window_set_text(files_window, "files: list failed");
+        files->entry_count = 0;
+        return;
+    }
+
+    files->entry_count = 0;
+
+    if (!path_is_root(files->cwd) && files->entry_count < FILES_ENTRY_MAX) {
+        str_copy_limit(files->entries[files->entry_count].name, FILES_NAME_MAX, "..");
+        files->entries[files->entry_count].is_dir = 1;
+        files->entry_count++;
+    }
+
+    const char *cursor = list;
+    while (*cursor != '\0' && files->entry_count < FILES_ENTRY_MAX) {
+        int is_dir = 0;
+
+        if (strncmp(cursor, "dir  ", 5) == 0) {
+            is_dir = 1;
+            cursor += 5;
+        } else if (strncmp(cursor, "file ", 5) == 0) {
+            is_dir = 0;
+            cursor += 5;
+        } else {
+            while (*cursor != '\0' && *cursor != '\n') {
+                ++cursor;
+            }
+            if (*cursor == '\n') {
+                ++cursor;
+            }
+            continue;
+        }
+
+        char name[FILES_NAME_MAX];
+        int name_len = 0;
+        while (*cursor != '\0' && *cursor != '\n' && name_len + 1 < (int)sizeof(name)) {
+            name[name_len++] = *cursor++;
+        }
+        name[name_len] = '\0';
+
+        while (*cursor != '\0' && *cursor != '\n') {
+            ++cursor;
+        }
+        if (*cursor == '\n') {
+            ++cursor;
+        }
+
+        str_copy_limit(files->entries[files->entry_count].name, FILES_NAME_MAX, name);
+        files->entries[files->entry_count].is_dir = is_dir;
+        files->entry_count++;
+    }
+
+    char text[WINDOW_TEXT_MAX];
+    int pos = 0;
+    pos = text_append(text, (int)sizeof(text), pos, "path: ");
+    pos = text_append(text, (int)sizeof(text), pos, files->cwd);
+    pos = text_append(text, (int)sizeof(text), pos, "\n");
+    pos = text_append(text, (int)sizeof(text), pos, "click: dir enter | file view\n");
+
+    for (int index = 0; index < files->entry_count; ++index) {
+        pos = text_append(text, (int)sizeof(text), pos, files->entries[index].is_dir ? "dir  " : "file ");
+        pos = text_append(text, (int)sizeof(text), pos, files->entries[index].name);
+        pos = text_append(text, (int)sizeof(text), pos, "\n");
+    }
+
+    window_set_text(files_window, text);
+}
+
+static int files_handle_click(
+    file_explorer_t *files,
+    window_t *files_window,
+    window_t *viewer_window,
+    int cursor_x,
+    int cursor_y) {
+    if (files == 0 || files_window == 0 || viewer_window == 0) {
+        return 0;
+    }
+
+    const rect_t body = rect_make(files_window->x + 2, files_window->y + 24,
+        files_window->width - 4, files_window->height - 26);
+
+    if (!rect_contains_point(body, cursor_x, cursor_y)) {
+        return 0;
+    }
+
+    const int text_start_y = files_window->y + 32;
+    if (cursor_y < text_start_y) {
+        return 0;
+    }
+
+    const int line = (cursor_y - text_start_y) / FONT_HEIGHT;
+    const int index = line - FILES_HEADER_LINES;
+
+    if (index < 0 || index >= files->entry_count) {
+        return 0;
+    }
+
+    const char *const name = files->entries[index].name;
+
+    char path[FILES_PATH_MAX];
+    if (files->entries[index].is_dir) {
+        if (strcmp(name, "..") == 0) {
+            path_parent(path, (int)sizeof(path), files->cwd);
+        } else {
+            path_join(path, (int)sizeof(path), files->cwd, name);
+        }
+
+        str_copy_limit(files->cwd, (int)sizeof(files->cwd), path);
+        files_refresh(files, files_window);
+        return 1;
+    }
+
+    path_join(path, (int)sizeof(path), files->cwd, name);
+    viewer_show_file(viewer_window, path);
+    return 1;
 }
 
 static void window_draw_clipped(int fb, const window_t *window, rect_t clip) {
@@ -466,7 +879,8 @@ static void window_draw_clipped(int fb, const window_t *window, rect_t clip) {
 
     const rect_t border_rect = rect_make(window->x, window->y, window->width, window->height);
     const rect_t title_rect = window_titlebar_rect(window);
-    const rect_t body_rect = rect_make(window->x + 2, window->y + 24, window->width - 4, window->height - 26);
+    const rect_t body_rect = window_body_rect(window);
+    const rect_t content_rect = window_content_rect(window);
 
     fb_fill_rect_clipped(fb, border_rect, clip, border);
     fb_fill_rect_clipped(fb, title_rect, clip, title_bg);
@@ -490,18 +904,40 @@ static void window_draw_clipped(int fb, const window_t *window, rect_t clip) {
         }
         line[length] = '\0';
 
-        fb_draw_string_clipped(fb, window->x + 8, window->y + 32, line, body_fg, body_bg, clip);
+        rect_t text_clip;
+        if (rect_intersect(&content_rect, &clip, &text_clip)) {
+            fb_draw_string_clipped(fb, window->x + 8, window->y + 32, line, body_fg, body_bg, text_clip);
+        }
     }
 
-    // Simple widget: a clickable button that increments a per-window counter.
-    const rect_t widget_rect = window_widget_button_rect(window);
-    fb_fill_rect_clipped(fb, widget_rect, clip, widget_bg);
-    fb_draw_string_clipped(fb, widget_rect.x + 8, widget_rect.y + 2, "Click", 0x00FFFFFF, widget_bg, clip);
+    if (window->role == WINDOW_ROLE_GENERIC) {
+        // Simple widget: a clickable button that increments a per-window counter.
+        const rect_t widget_rect = window_widget_button_rect(window);
+        fb_fill_rect_clipped(fb, widget_rect, clip, widget_bg);
+        fb_draw_string_clipped(fb, widget_rect.x + 8, widget_rect.y + 2, "Click",
+            0x00FFFFFF, widget_bg, clip);
 
-    char counter_text[32];
-    build_counter_label(counter_text, (unsigned int)window->counter);
-    fb_draw_string_clipped(fb, widget_rect.x + widget_rect.width + 12, widget_rect.y + 2,
-        counter_text, body_fg, body_bg, clip);
+        char counter_text[32];
+        build_counter_label(counter_text, (unsigned int)window->counter);
+        fb_draw_string_clipped(fb, widget_rect.x + widget_rect.width + 12, widget_rect.y + 2,
+            counter_text, body_fg, body_bg, clip);
+    }
+
+    if (window->role == WINDOW_ROLE_NOTEPAD) {
+        const rect_t clear_rect = window_notepad_clear_button_rect(window);
+        fb_fill_rect_clipped(fb, clear_rect, clip, widget_bg);
+        fb_draw_string_clipped(fb, clear_rect.x + 8, clear_rect.y + 2, "Clear",
+            0x00FFFFFF, widget_bg, clip);
+
+        // Caret is a simple 2px underline drawn at the insertion point.
+        if (window->focused) {
+            int caret_x;
+            int caret_y;
+            window_text_cursor_xy(window, window->text_cursor, &caret_x, &caret_y);
+            const rect_t caret_rect = rect_make(caret_x, caret_y + FONT_HEIGHT - 2, FONT_WIDTH, 2);
+            fb_fill_rect_clipped(fb, caret_rect, clip, 0x00FFD34D);
+        }
+    }
 }
 
 static void window_draw(int fb, const window_t *window) {
@@ -537,17 +973,33 @@ static void window_draw(int fb, const window_t *window) {
         }
         line[length] = '\0';
 
-        fb_draw_string(fb, window->x + 8, window->y + 32, line, body_fg, body_bg);
+        const rect_t content_rect = window_content_rect(window);
+        fb_draw_string_clipped(fb, window->x + 8, window->y + 32, line, body_fg, body_bg, content_rect);
     }
 
-    const rect_t widget_rect = window_widget_button_rect(window);
-    fb_fill_rect(fb, widget_rect.x, widget_rect.y, widget_rect.width, widget_rect.height, widget_bg);
-    fb_draw_string(fb, widget_rect.x + 8, widget_rect.y + 2, "Click", 0x00FFFFFF, widget_bg);
+    if (window->role == WINDOW_ROLE_GENERIC) {
+        const rect_t widget_rect = window_widget_button_rect(window);
+        fb_fill_rect(fb, widget_rect.x, widget_rect.y, widget_rect.width, widget_rect.height, widget_bg);
+        fb_draw_string(fb, widget_rect.x + 8, widget_rect.y + 2, "Click", 0x00FFFFFF, widget_bg);
 
-    char counter_text[32];
-    build_counter_label(counter_text, (unsigned int)window->counter);
-    fb_draw_string(fb, widget_rect.x + widget_rect.width + 12, widget_rect.y + 2,
-        counter_text, body_fg, body_bg);
+        char counter_text[32];
+        build_counter_label(counter_text, (unsigned int)window->counter);
+        fb_draw_string(fb, widget_rect.x + widget_rect.width + 12, widget_rect.y + 2,
+            counter_text, body_fg, body_bg);
+    }
+
+    if (window->role == WINDOW_ROLE_NOTEPAD) {
+        const rect_t clear_rect = window_notepad_clear_button_rect(window);
+        fb_fill_rect(fb, clear_rect.x, clear_rect.y, clear_rect.width, clear_rect.height, widget_bg);
+        fb_draw_string(fb, clear_rect.x + 8, clear_rect.y + 2, "Clear", 0x00FFFFFF, widget_bg);
+
+        if (window->focused) {
+            int caret_x;
+            int caret_y;
+            window_text_cursor_xy(window, window->text_cursor, &caret_x, &caret_y);
+            fb_fill_rect(fb, caret_x, caret_y + FONT_HEIGHT - 2, FONT_WIDTH, 2, 0x00FFD34D);
+        }
+    }
 }
 
 static int taskbar_top(const user_fb_info_t *info) {
@@ -591,8 +1043,8 @@ static int start_menu_item_at(const user_fb_info_t *info, int x, int y) {
 
 static const char *start_menu_item_text(int index) {
     switch (index) {
-        case 0: return "Toggle Window 2";
-        case 1: return "Clear Focused";
+        case 0: return "Toggle Files";
+        case 1: return "Clear Text";
         case 2: return "Help";
         default: return "";
     }
@@ -650,6 +1102,76 @@ static void draw_cursor(int fb, int x, int y) {
     fb_fill_rect(fb, x + 2, y + 2, CURSOR_WIDTH - 4, CURSOR_HEIGHT - 4, 0x00000000);
 }
 
+static void wallpaper_load(void) {
+    const int fd = sys_open(WALLPAPER_PATH);
+    if (fd < 0) {
+        g_wallpaper_loaded = 0;
+        return;
+    }
+
+    unsigned char *const dst = (unsigned char *)g_wallpaper_pixels;
+    const int total_bytes = WALLPAPER_WIDTH * WALLPAPER_HEIGHT * 4;
+    int offset = 0;
+
+    while (offset < total_bytes) {
+        const int read_count = sys_read(fd, dst + offset, total_bytes - offset);
+        if (read_count <= 0) {
+            break;
+        }
+        offset += read_count;
+    }
+
+    sys_close(fd);
+    g_wallpaper_loaded = (offset == total_bytes);
+}
+
+static rect_t wallpaper_rect(const user_fb_info_t *info) {
+    int x = 0;
+    int y = 0;
+
+    if (info != 0) {
+        x = (info->width - WALLPAPER_WIDTH) / 2;
+        y = (taskbar_top(info) - WALLPAPER_HEIGHT) / 2;
+    }
+
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+
+    return rect_make(x, y, WALLPAPER_WIDTH, WALLPAPER_HEIGHT);
+}
+
+static void desktop_draw_background_clipped(int fb, const user_fb_info_t *info, rect_t clip) {
+    fb_fill_rect(fb, clip.x, clip.y, clip.width, clip.height, COLOR_DESKTOP_BG);
+
+    if (!g_wallpaper_loaded) {
+        return;
+    }
+
+    const rect_t wallpaper = wallpaper_rect(info);
+    rect_t visible;
+
+    if (!rect_intersect(&wallpaper, &clip, &visible)) {
+        return;
+    }
+
+    const int src_x = visible.x - wallpaper.x;
+    const int src_y = visible.y - wallpaper.y;
+
+    user_fb_blit_t blit;
+    blit.dst_x = visible.x;
+    blit.dst_y = visible.y;
+    blit.width = visible.width;
+    blit.height = visible.height;
+    blit.source = &g_wallpaper_pixels[src_y * WALLPAPER_WIDTH + src_x];
+    blit.source_stride = WALLPAPER_WIDTH * 4;
+    blit.format = USER_FB_FORMAT_XRGB8888;
+    sys_fb_blit(fb, &blit);
+}
+
 static void redraw_region(
     int fb,
     const user_fb_info_t *info,
@@ -664,7 +1186,7 @@ static void redraw_region(
         return;
     }
 
-    fb_fill_rect(fb, clip.x, clip.y, clip.width, clip.height, COLOR_DESKTOP_BG);
+    desktop_draw_background_clipped(fb, info, clip);
 
     for (int i = 0; i < WINDOW_MAX; ++i) {
         if (i == focused) {
@@ -695,7 +1217,7 @@ static void redraw(
     int start_menu_open,
     int cursor_x,
     int cursor_y) {
-    fb_fill_rect(fb, 0, 0, info->width, info->height, COLOR_DESKTOP_BG);
+    desktop_draw_background_clipped(fb, info, rect_make(0, 0, info->width, info->height));
 
     for (int i = 0; i < WINDOW_MAX; ++i) {
         if (i == focused) {
@@ -729,14 +1251,18 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    wallpaper_load();
+
     int mouse_fd = sys_open("/dev/mouse0");
 
     window_t windows[WINDOW_MAX];
     for (int i = 0; i < WINDOW_MAX; ++i) {
         windows[i].text_length = 0;
+        windows[i].text_cursor = 0;
         windows[i].focused = false;
         windows[i].visible = true;
         windows[i].counter = 0;
+        windows[i].role = WINDOW_ROLE_GENERIC;
         for (int j = 0; j < WINDOW_TEXT_MAX; ++j) {
             windows[i].text[j] = '\0';
         }
@@ -746,16 +1272,33 @@ int main(int argc, char **argv) {
     windows[0].y = 60;
     windows[0].width = 420;
     windows[0].height = 240;
-    windows[0].title = "Window 1";
+    windows[0].title = "Notepad";
     windows[0].focused = true;
     windows[0].visible = true;
+    windows[0].role = WINDOW_ROLE_NOTEPAD;
+    notepad_load(&windows[0], "/home/notes.txt");
 
-    windows[1].x = 220;
-    windows[1].y = 180;
-    windows[1].width = 420;
+    windows[1].x = 520;
+    windows[1].y = 60;
+    windows[1].width = 440;
     windows[1].height = 240;
-    windows[1].title = "Window 2";
+    windows[1].title = "Viewer";
     windows[1].visible = true;
+    windows[1].role = WINDOW_ROLE_VIEWER;
+    window_set_text(&windows[1], "Click a file in Files to preview it.");
+
+    windows[2].x = 60;
+    windows[2].y = 330;
+    windows[2].width = 900;
+    windows[2].height = 360;
+    windows[2].title = "Files";
+    windows[2].visible = true;
+    windows[2].role = WINDOW_ROLE_FILES;
+
+    file_explorer_t files;
+    str_copy_limit(files.cwd, (int)sizeof(files.cwd), "/");
+    files.entry_count = 0;
+    files_refresh(&files, &windows[2]);
 
     int focused = 0;
     int cursor_x = 20;
@@ -769,14 +1312,15 @@ int main(int argc, char **argv) {
     int drag_offset_y = 0;
 
     redraw(fb, &info, windows, focused, start_menu_open, cursor_x, cursor_y);
-    write_str("wm: drag title bar; click Start; esc/q quit\n");
 
     for (;;) {
-        int need_redraw = 0;
         int cursor_moved = 0;
         const int old_cursor_x = cursor_x;
         const int old_cursor_y = cursor_y;
+        dirty_list_t dirty;
+        dirty_reset(&dirty);
         int had_input = 0;
+        const int old_focused = focused;
 
         if (mouse_fd >= 0) {
             user_mouse_event_t events[8];
@@ -810,9 +1354,16 @@ int main(int argc, char **argv) {
                             const int new_y = clamp_int(desired_y, 0, max_y);
 
                             if (new_x != windows[drag_window].x || new_y != windows[drag_window].y) {
+                                const rect_t old_rect = rect_make(
+                                    windows[drag_window].x, windows[drag_window].y,
+                                    windows[drag_window].width, windows[drag_window].height);
                                 windows[drag_window].x = new_x;
                                 windows[drag_window].y = new_y;
-                                need_redraw = 1;
+                                const rect_t new_rect = rect_make(
+                                    windows[drag_window].x, windows[drag_window].y,
+                                    windows[drag_window].width, windows[drag_window].height);
+                                const rect_t moved = rect_union(old_rect, new_rect);
+                                dirty_add(&dirty, moved, &info);
                             }
                         }
                     }
@@ -825,7 +1376,8 @@ int main(int argc, char **argv) {
                             start_menu_open = !start_menu_open;
                             dragging = 0;
                             drag_window = -1;
-                            need_redraw = 1;
+                            dirty_add(&dirty, taskbar_rect(&info), &info);
+                            dirty_add(&dirty, start_menu_rect(&info), &info);
                             continue;
                         }
 
@@ -833,32 +1385,46 @@ int main(int argc, char **argv) {
                             const int item = start_menu_item_at(&info, cursor_x, cursor_y);
                             if (item >= 0) {
                                 if (item == 0) {
-                                    windows[1].visible = !windows[1].visible;
-                                    if (!windows[1].visible && focused == 1) {
+                                    const rect_t files_rect = rect_make(
+                                        windows[2].x, windows[2].y, windows[2].width, windows[2].height);
+                                    windows[2].visible = !windows[2].visible;
+                                    if (!windows[2].visible && focused == 2) {
                                         focused = first_visible_window(windows);
                                     }
+                                    dirty_add(&dirty, files_rect, &info);
                                 } else if (item == 1) {
-                                    if (focused >= 0 && focused < WINDOW_MAX) {
+                                    if (focused >= 0 && focused < WINDOW_MAX
+                                        && (windows[focused].role == WINDOW_ROLE_GENERIC
+                                            || windows[focused].role == WINDOW_ROLE_NOTEPAD)) {
                                         windows[focused].counter = 0;
-                                        window_set_text(&windows[focused], "");
+                                        windows[focused].text_length = 0;
+                                        windows[focused].text_cursor = 0;
+                                        windows[focused].text[0] = '\0';
+                                        dirty_add(&dirty, window_content_rect(&windows[focused]), &info);
                                     }
                                 } else if (item == 2) {
-                                    if (focused >= 0 && focused < WINDOW_MAX) {
-                                        window_set_text(&windows[focused],
-                                            "Drag title bar to move.\n"
-                                            "Click the button to increment.\n"
-                                            "Start toggles Window 2.");
-                                    }
+                                    window_set_text(&windows[1],
+                                        "Help:\n"
+                                        "- Left click title bar to drag.\n"
+                                        "- Start button toggles the menu.\n"
+                                        "- Files lists the VFS tree.\n"
+                                        "- Notepad is editable.\n"
+                                        "- ESC exits the WM.");
+                                    windows[1].visible = true;
+                                    focused = 1;
+                                    dirty_add(&dirty, rect_make(windows[1].x, windows[1].y, windows[1].width, windows[1].height), &info);
                                 }
 
                                 start_menu_open = 0;
-                                need_redraw = 1;
+                                dirty_add(&dirty, taskbar_rect(&info), &info);
+                                dirty_add(&dirty, start_menu_rect(&info), &info);
                                 continue;
                             }
 
                             // Clicking outside the menu closes it.
                             start_menu_open = 0;
-                            need_redraw = 1;
+                            dirty_add(&dirty, taskbar_rect(&info), &info);
+                            dirty_add(&dirty, start_menu_rect(&info), &info);
                         }
 
                         int clicked = -1;
@@ -879,8 +1445,15 @@ int main(int argc, char **argv) {
 
                         if (clicked >= 0) {
                             if (focused != clicked) {
+                                const int prev_focus = focused;
                                 focused = clicked;
-                                need_redraw = 1;
+                                if (prev_focus >= 0 && prev_focus < WINDOW_MAX && windows[prev_focus].visible) {
+                                    dirty_add(&dirty, rect_make(windows[prev_focus].x, windows[prev_focus].y,
+                                        windows[prev_focus].width, windows[prev_focus].height), &info);
+                                }
+                                dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y,
+                                    windows[focused].width, windows[focused].height), &info);
+                                dirty_add(&dirty, taskbar_rect(&info), &info);
                             }
 
                             const rect_t close_rect = window_close_button_rect(&windows[clicked]);
@@ -888,21 +1461,44 @@ int main(int argc, char **argv) {
                             const rect_t title_rect = window_titlebar_rect(&windows[clicked]);
 
                             if (rect_contains_point(close_rect, cursor_x, cursor_y)) {
+                                const rect_t closed_rect = rect_make(
+                                    windows[clicked].x, windows[clicked].y, windows[clicked].width, windows[clicked].height);
                                 windows[clicked].visible = 0;
                                 dragging = 0;
                                 drag_window = -1;
                                 if (focused == clicked) {
                                     focused = first_visible_window(windows);
                                 }
-                                need_redraw = 1;
-                            } else if (rect_contains_point(widget_rect, cursor_x, cursor_y)) {
-                                windows[clicked].counter++;
-                                need_redraw = 1;
+                                dirty_add(&dirty, closed_rect, &info);
+                                dirty_add(&dirty, taskbar_rect(&info), &info);
                             } else if (rect_contains_point(title_rect, cursor_x, cursor_y)) {
                                 dragging = 1;
                                 drag_window = clicked;
                                 drag_offset_x = cursor_x - windows[clicked].x;
                                 drag_offset_y = cursor_y - windows[clicked].y;
+                            } else if (windows[clicked].role == WINDOW_ROLE_FILES) {
+                                if (files_handle_click(&files, &windows[clicked], &windows[1], cursor_x, cursor_y)) {
+                                    dirty_add(&dirty, window_body_rect(&windows[clicked]), &info);
+                                    dirty_add(&dirty, window_body_rect(&windows[1]), &info);
+                                }
+                            } else if (windows[clicked].role == WINDOW_ROLE_GENERIC
+                                && rect_contains_point(widget_rect, cursor_x, cursor_y)) {
+                                const rect_t old_label =
+                                    window_counter_label_rect(&windows[clicked], (unsigned int)windows[clicked].counter);
+                                windows[clicked].counter++;
+                                const rect_t new_label =
+                                    window_counter_label_rect(&windows[clicked], (unsigned int)windows[clicked].counter);
+                                const rect_t changed = rect_union(old_label, new_label);
+                                dirty_add(&dirty, changed, &info);
+                            } else if (windows[clicked].role == WINDOW_ROLE_NOTEPAD) {
+                                const rect_t clear_rect = window_notepad_clear_button_rect(&windows[clicked]);
+                                if (rect_contains_point(clear_rect, cursor_x, cursor_y)) {
+                                    windows[clicked].text_length = 0;
+                                    windows[clicked].text_cursor = 0;
+                                    windows[clicked].text[0] = '\0';
+                                    dirty_add(&dirty, window_content_rect(&windows[clicked]), &info);
+                                    dirty_add(&dirty, clear_rect, &info);
+                                }
                             }
                         }
                     }
@@ -932,31 +1528,101 @@ int main(int argc, char **argv) {
         if (read_count > 0) {
             had_input = 1;
 
-            if (c == 27 || c == 'q') {
+            if (c == 27) {
                 break;
             }
 
             if (c == '1') {
                 if (windows[0].visible) {
+                    const int prev = focused;
                     focused = 0;
-                    need_redraw = 1;
+                    if (prev != focused) {
+                        if (prev >= 0 && prev < WINDOW_MAX) {
+                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        }
+                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        dirty_add(&dirty, taskbar_rect(&info), &info);
+                    }
                 }
             } else if (c == '2') {
                 if (windows[1].visible) {
+                    const int prev = focused;
                     focused = 1;
-                    need_redraw = 1;
+                    if (prev != focused) {
+                        if (prev >= 0 && prev < WINDOW_MAX) {
+                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        }
+                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        dirty_add(&dirty, taskbar_rect(&info), &info);
+                    }
+                }
+            } else if (c == '3') {
+                if (windows[2].visible) {
+                    const int prev = focused;
+                    focused = 2;
+                    if (prev != focused) {
+                        if (prev >= 0 && prev < WINDOW_MAX) {
+                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        }
+                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        dirty_add(&dirty, taskbar_rect(&info), &info);
+                    }
                 }
             } else if (c == '\b') {
-                if (focused >= 0 && focused < WINDOW_MAX && windows[focused].text_length > 0) {
-                    windows[focused].text_length--;
+                if (focused >= 0 && focused < WINDOW_MAX
+                    && (windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD)
+                    && windows[focused].text_cursor > 0) {
+                    const int old_cursor = windows[focused].text_cursor;
+                    windows[focused].text_cursor--;
+                    if (windows[focused].text_length > windows[focused].text_cursor) {
+                        windows[focused].text_length = windows[focused].text_cursor;
+                    }
                     windows[focused].text[windows[focused].text_length] = '\0';
-                    need_redraw = 1;
+
+                    int old_x;
+                    int old_y;
+                    int new_x;
+                    int new_y;
+                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                }
+            } else if (c == '\n') {
+                if (focused >= 0 && focused < WINDOW_MAX
+                    && windows[focused].role == WINDOW_ROLE_NOTEPAD
+                    && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
+                    const int old_cursor = windows[focused].text_cursor;
+                    windows[focused].text[windows[focused].text_cursor++] = '\n';
+                    windows[focused].text_length = windows[focused].text_cursor;
+                    windows[focused].text[windows[focused].text_length] = '\0';
+
+                    int old_x;
+                    int old_y;
+                    int new_x;
+                    int new_y;
+                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
                 }
             } else if (c >= 32 && c <= 126) {
-                if (focused >= 0 && focused < WINDOW_MAX && windows[focused].text_length + 1 < WINDOW_TEXT_MAX) {
-                    windows[focused].text[windows[focused].text_length++] = c;
+                if (focused >= 0 && focused < WINDOW_MAX
+                    && (windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD)
+                    && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
+                    const int old_cursor = windows[focused].text_cursor;
+                    windows[focused].text[windows[focused].text_cursor++] = c;
+                    windows[focused].text_length = windows[focused].text_cursor;
                     windows[focused].text[windows[focused].text_length] = '\0';
-                    need_redraw = 1;
+
+                    int old_x;
+                    int old_y;
+                    int new_x;
+                    int new_y;
+                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
                 }
             }
         }
@@ -965,27 +1631,47 @@ int main(int argc, char **argv) {
             windows[i].focused = (i == focused) && windows[i].visible;
         }
 
-        if (need_redraw) {
-            redraw(fb, &info, windows, focused, start_menu_open, cursor_x, cursor_y);
-            drawn_cursor_x = cursor_x;
-            drawn_cursor_y = cursor_y;
-        } else if (cursor_moved) {
-            // Restore old cursor area + prepare new cursor area in one go.
-            rect_t old_rect = rect_make(drawn_cursor_x, drawn_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
-            rect_t new_rect = rect_make(cursor_x, cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
-            rect_t dirty = rect_union(old_rect, new_rect);
+        if (old_focused != focused) {
+            if (old_focused >= 0 && old_focused < WINDOW_MAX) {
+                dirty_add(&dirty, rect_make(windows[old_focused].x, windows[old_focused].y,
+                    windows[old_focused].width, windows[old_focused].height), &info);
+            }
+            if (focused >= 0 && focused < WINDOW_MAX) {
+                dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y,
+                    windows[focused].width, windows[focused].height), &info);
+            }
+            dirty_add(&dirty, taskbar_rect(&info), &info);
+        }
 
-            redraw_region(fb, &info, windows, focused, start_menu_open, dirty);
+        if (cursor_moved) {
+            dirty_add(&dirty, rect_make(drawn_cursor_x, drawn_cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT), &info);
+            dirty_add(&dirty, rect_make(cursor_x, cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT), &info);
+        }
+
+        int cursor_needs_redraw = cursor_moved;
+        const rect_t cursor_rect = rect_make(cursor_x, cursor_y, CURSOR_WIDTH, CURSOR_HEIGHT);
+        for (int i = 0; i < dirty.count; ++i) {
+            redraw_region(fb, &info, windows, focused, start_menu_open, dirty.rects[i]);
+
+            if (!cursor_needs_redraw) {
+                rect_t visible;
+                if (rect_intersect(&cursor_rect, &dirty.rects[i], &visible)) {
+                    cursor_needs_redraw = 1;
+                }
+            }
+        }
+
+        if (cursor_needs_redraw) {
             draw_cursor(fb, cursor_x, cursor_y);
-
             drawn_cursor_x = cursor_x;
             drawn_cursor_y = cursor_y;
         }
 
-        if (!had_input && !cursor_moved && !need_redraw) {
+        if (!had_input && !cursor_moved && dirty.count == 0) {
             sys_yield();
         }
-    } // End of the code
+    }
+
     if (mouse_fd >= 0) {
         sys_close(mouse_fd);
     }
