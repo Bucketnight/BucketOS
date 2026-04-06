@@ -10,6 +10,7 @@
 #include "user/fb.h"
 #include "user/lib.h"
 #include "user/mouse.h"
+#include "user/bpkg.h"
 
 #define WALLPAPER_PATH "/usr/share/wallpaper.bgra"
 
@@ -17,7 +18,8 @@ enum {
     FONT_WIDTH = 8,
     FONT_HEIGHT = 16,
     WINDOW_TEXT_MAX = 4096,
-    WINDOW_MAX = 3,
+    BROWSER_URL_MAX = 256,
+    WINDOW_MAX = 6,
     WALLPAPER_WIDTH = 786,
     WALLPAPER_HEIGHT = 103,
     CURSOR_WIDTH = 10,
@@ -27,7 +29,7 @@ enum {
     START_BUTTON_WIDTH = 72,
     START_MENU_WIDTH = 160,
     START_MENU_ITEM_HEIGHT = 20,
-    START_MENU_ITEMS = 3,
+    START_MENU_ITEMS = 6,
     CLOSE_BUTTON_SIZE = 16
 };
 
@@ -46,7 +48,10 @@ typedef enum {
     WINDOW_ROLE_GENERIC = 0,
     WINDOW_ROLE_VIEWER = 1,
     WINDOW_ROLE_FILES = 2,
-    WINDOW_ROLE_NOTEPAD = 3
+    WINDOW_ROLE_NOTEPAD = 3,
+    WINDOW_ROLE_SYSTEM = 4,
+    WINDOW_ROLE_BROWSER = 5,
+    WINDOW_ROLE_TERMINAL = 6
 } window_role_t;
 
 typedef struct {
@@ -62,6 +67,8 @@ typedef struct {
     int visible;
     int counter;
     window_role_t role;
+    char terminal_input[128];
+    int terminal_input_length;
 } window_t;
 
 typedef struct {
@@ -507,6 +514,14 @@ static rect_t window_notepad_clear_button_rect(const window_t *window) {
     return window_widget_button_rect(window);
 }
 
+static rect_t window_browser_url_rect(const window_t *window) {
+    return rect_make(window->x + 8, window->y + 32, window->width - 16 - 92, 20);
+}
+
+static rect_t window_browser_go_button_rect(const window_t *window) {
+    return rect_make(window->x + window->width - 92, window->y + 32, 84, 20);
+}
+
 static rect_t window_counter_label_rect(const window_t *window, unsigned int value) {
     char counter_text[32];
     build_counter_label(counter_text, value);
@@ -595,6 +610,7 @@ static void window_text_cursor_xy(const window_t *window, int cursor, int *out_x
     *out_y = y;
 }
 
+
 enum {
     FILES_PATH_MAX = 96,
     FILES_LIST_MAX = 1024,
@@ -628,6 +644,7 @@ static void str_copy_limit(char *dst, int dst_size, const char *src) {
     dst[index] = '\0';
 }
 
+
 static int text_append(char *dst, int dst_size, int pos, const char *src) {
     if (dst == 0 || dst_size <= 0) {
         return pos;
@@ -647,6 +664,45 @@ static int text_append(char *dst, int dst_size, int pos, const char *src) {
     }
     dst[pos < dst_size ? pos : (dst_size - 1)] = '\0';
     return pos;
+}
+
+
+static char g_browser_url[BROWSER_URL_MAX];
+static int g_browser_url_length;
+
+static void browser_set_url(const char *url) {
+    str_copy_limit(g_browser_url, (int)sizeof(g_browser_url), url);
+    int length = 0;
+    while (g_browser_url[length] != '\0' && length < (int)sizeof(g_browser_url)) {
+        ++length;
+    }
+    g_browser_url_length = length;
+}
+
+static void browser_load_url(window_t *window, const char *url) {
+    if (window == 0) {
+        return;
+    }
+
+    if (url != 0 && url[0] != '\0') {
+        browser_set_url(url);
+    }
+
+    if (g_browser_url_length == 0) {
+        browser_set_url("http://bucketos.local/");
+    }
+
+    const int bytes = sys_http_get(g_browser_url, window->text, WINDOW_TEXT_MAX - 1);
+    if (bytes < 0) {
+        window_set_text(window,
+            "Browser Error:\n"
+            "Unable to fetch URL.\n"
+            "Check network support.");
+    } else {
+        window->text[bytes] = '\0';
+        window->text_length = bytes;
+        window->text_cursor = 0;
+    }
 }
 
 static int path_is_root(const char *path) {
@@ -709,6 +765,146 @@ static void path_join(char *out, int out_size, const char *base, const char *nam
     }
 
     pos = text_append(out, out_size, pos, name);
+}
+
+static char g_terminal_cwd[96] = "/";
+
+static void window_terminal_append(window_t *window, const char *text) {
+    if (window == 0 || text == 0) {
+        return;
+    }
+
+    int pos = window->text_length;
+    pos = text_append(window->text, WINDOW_TEXT_MAX, pos, text);
+    if (pos >= WINDOW_TEXT_MAX) {
+        pos = WINDOW_TEXT_MAX - 1;
+    }
+    window->text_length = pos;
+    window->text[pos] = '\0';
+    window->text_cursor = pos;
+}
+
+static void window_terminal_append_line(window_t *window, const char *text) {
+    window_terminal_append(window, text);
+    if (window->text_length + 1 < WINDOW_TEXT_MAX) {
+        window->text[window->text_length++] = '\n';
+        window->text[window->text_length] = '\0';
+        window->text_cursor = window->text_length;
+    }
+}
+
+static void terminal_execute_command(window_t *window, const char *line) {
+    if (window == 0 || line == 0) {
+        return;
+    }
+
+    char command[128];
+    int command_len = 0;
+    while (line[command_len] != '\0' && line[command_len] != ' ' && command_len + 1 < (int)sizeof(command)) {
+        command[command_len] = line[command_len];
+        ++command_len;
+    }
+    command[command_len] = '\0';
+
+    const char *args = line + command_len;
+    while (*args == ' ') {
+        ++args;
+    }
+
+    char prompt[160];
+    prompt[0] = '\0';
+    text_append(prompt, (int)sizeof(prompt), 0, "term> ");
+    text_append(prompt, (int)sizeof(prompt), (int)strlen(prompt), line);
+    window_terminal_append_line(window, prompt);
+
+    if (strcmp(command, "help") == 0) {
+        window_terminal_append_line(window, "commands: help echo cat ls cd readme clear bpkg");
+    } else if (strcmp(command, "echo") == 0) {
+        window_terminal_append_line(window, args);
+    } else if (strcmp(command, "cat") == 0) {
+        if (*args == '\0') {
+            window_terminal_append_line(window, "cat: missing path");
+        } else {
+            char path[96];
+            if (args[0] == '/') {
+                str_copy_limit(path, (int)sizeof(path), args);
+            } else {
+                path_join(path, (int)sizeof(path), g_terminal_cwd, args);
+            }
+            const int fd = sys_open(path);
+            if (fd < 0) {
+                window_terminal_append_line(window, "cat: file not found");
+            } else {
+                char buffer[128];
+                int count;
+                while ((count = sys_read(fd, buffer, sizeof(buffer) - 1)) > 0) {
+                    buffer[count] = '\0';
+                    window_terminal_append(window, buffer);
+                }
+                sys_close(fd);
+                window_terminal_append_line(window, "");
+            }
+        }
+    } else if (strcmp(command, "ls") == 0) {
+        char path[96];
+        if (*args == '\0') {
+            str_copy_limit(path, (int)sizeof(path), g_terminal_cwd);
+        } else if (args[0] == '/') {
+            str_copy_limit(path, (int)sizeof(path), args);
+        } else {
+            path_join(path, (int)sizeof(path), g_terminal_cwd, args);
+        }
+        char list[1024];
+        const int count = sys_list(path, list, (int)sizeof(list));
+        if (count < 0) {
+            window_terminal_append_line(window, "ls: path not found");
+        } else {
+            list[count < (int)sizeof(list) ? count : ((int)sizeof(list) - 1)] = '\0';
+            window_terminal_append_line(window, list);
+        }
+    } else if (strcmp(command, "cd") == 0) {
+        if (*args == '\0') {
+            window_terminal_append_line(window, g_terminal_cwd);
+        } else {
+            char path[96];
+            if (args[0] == '/') {
+                str_copy_limit(path, (int)sizeof(path), args);
+            } else {
+                path_join(path, (int)sizeof(path), g_terminal_cwd, args);
+            }
+            char list[1024];
+            if (sys_list(path, list, (int)sizeof(list)) < 0) {
+                window_terminal_append_line(window, "cd: path not found");
+            } else {
+                str_copy_limit(g_terminal_cwd, (int)sizeof(g_terminal_cwd), path);
+            }
+        }
+    } else if (strcmp(command, "readme") == 0) {
+        const int fd = sys_open("/readme.txt");
+        if (fd < 0) {
+            window_terminal_append_line(window, "readme: file not found");
+        } else {
+            char buffer[128];
+            int count;
+            while ((count = sys_read(fd, buffer, sizeof(buffer) - 1)) > 0) {
+                buffer[count] = '\0';
+                window_terminal_append(window, buffer);
+            }
+            sys_close(fd);
+            window_terminal_append_line(window, "");
+        }
+    } else if (strcmp(command, "clear") == 0) {
+        window_set_text(window, "");
+    } else if (strcmp(command, "bpkg") == 0 || strncmp(line, "bpkg ", 5) == 0) {
+        char output[512];
+        bpkg_run_command((char *)line, output, sizeof(output));
+        window_terminal_append_line(window, output);
+    } else if (strcmp(command, "exit") == 0) {
+        window_terminal_append_line(window, "Terminal closed.");
+        window->visible = 0;
+    } else if (*command != '\0') {
+        window_terminal_append_line(window, "unknown command");
+    }
 }
 
 static void viewer_show_file(window_t *viewer, const char *path) {
@@ -893,6 +1089,38 @@ static void window_draw_clipped(int fb, const window_t *window, rect_t clip) {
     fb_fill_rect_clipped(fb, close_rect, clip, close_bg);
     fb_blit_glyph_clipped(fb, close_rect.x + 4, close_rect.y + 1, 'X', 0x00FFFFFF, close_bg, clip);
 
+    if (window->role == WINDOW_ROLE_BROWSER) {
+        const rect_t url_rect = window_browser_url_rect(window);
+        const rect_t go_rect = window_browser_go_button_rect(window);
+
+        fb_fill_rect_clipped(fb, url_rect, clip, widget_bg);
+        fb_fill_rect_clipped(fb, go_rect, clip, widget_bg);
+        fb_draw_string_clipped(fb, url_rect.x + 4, url_rect.y + 2, "URL:", body_fg, widget_bg, clip);
+        fb_draw_string_clipped(fb, url_rect.x + 4 + 4 * FONT_WIDTH, url_rect.y + 2,
+            g_browser_url, body_fg, widget_bg, clip);
+        fb_draw_string_clipped(fb, go_rect.x + 10, go_rect.y + 2, "Go", 0x00FFFFFF, widget_bg, clip);
+
+        if (window->text_length > 0) {
+            char line[WINDOW_TEXT_MAX + 1];
+            int length = window->text_length;
+            if (length > WINDOW_TEXT_MAX) {
+                length = WINDOW_TEXT_MAX;
+            }
+            for (int i = 0; i < length; ++i) {
+                line[i] = window->text[i];
+            }
+            line[length] = '\0';
+
+            rect_t content_clip = rect_make(content_rect.x, content_rect.y + 28,
+                content_rect.width, content_rect.height - 28);
+            if (rect_intersect(&content_rect, &clip, &content_clip)) {
+                fb_draw_string_clipped(fb, window->x + 8, window->y + 56, line, body_fg, body_bg, content_clip);
+            }
+        }
+
+        return;
+    }
+
     if (window->text_length > 0) {
         char line[WINDOW_TEXT_MAX + 1];
         int length = window->text_length;
@@ -938,7 +1166,26 @@ static void window_draw_clipped(int fb, const window_t *window, rect_t clip) {
             fb_fill_rect_clipped(fb, caret_rect, clip, 0x00FFD34D);
         }
     }
+
+    if (window->role == WINDOW_ROLE_TERMINAL) {
+        const rect_t input_rect = rect_make(window->x + 8, window->y + window->height - 32,
+            window->width - 16, 24);
+        fb_draw_string_clipped(fb, input_rect.x, input_rect.y, "term> ", body_fg, body_bg, input_rect);
+        fb_draw_string_clipped(fb, input_rect.x + 6 * FONT_WIDTH, input_rect.y,
+            window->terminal_input, body_fg, body_bg, input_rect);
+
+        if (window->focused) {
+            const int cursor_x = input_rect.x + 6 * FONT_WIDTH + window->terminal_input_length * FONT_WIDTH;
+            const int cursor_y = input_rect.y + FONT_HEIGHT - 2;
+            fb_fill_rect_clipped(fb, rect_make(cursor_x, cursor_y, FONT_WIDTH, 2), clip, 0x00FFD34D);
+        }
+    }
+
+    if (window->role == WINDOW_ROLE_SYSTEM) {
+        // System info panel uses generic text rendering from window->text.
+    }
 }
+
 
 static void window_draw(int fb, const window_t *window) {
     if (!window->visible) {
@@ -961,6 +1208,37 @@ static void window_draw(int fb, const window_t *window) {
     const int close_bg = window->focused ? 0x00C62828 : 0x00444444;
     fb_fill_rect(fb, close_rect.x, close_rect.y, close_rect.width, close_rect.height, close_bg);
     fb_blit_glyph(fb, close_rect.x + 4, close_rect.y + 1, 'X', 0x00FFFFFF, close_bg);
+
+    if (window->role == WINDOW_ROLE_BROWSER) {
+        const rect_t url_rect = window_browser_url_rect(window);
+        const rect_t go_rect = window_browser_go_button_rect(window);
+        const rect_t content_rect = window_content_rect(window);
+
+        fb_fill_rect(fb, url_rect.x, url_rect.y, url_rect.width, url_rect.height, widget_bg);
+        fb_fill_rect(fb, go_rect.x, go_rect.y, go_rect.width, go_rect.height, widget_bg);
+        fb_draw_string(fb, url_rect.x + 4, url_rect.y + 2, "URL:", body_fg, widget_bg);
+        fb_draw_string(fb, url_rect.x + 4 + 4 * FONT_WIDTH, url_rect.y + 2,
+            g_browser_url, body_fg, widget_bg);
+        fb_draw_string(fb, go_rect.x + 10, go_rect.y + 2, "Go", 0x00FFFFFF, widget_bg);
+
+        if (window->text_length > 0) {
+            char line[WINDOW_TEXT_MAX + 1];
+            int length = window->text_length;
+            if (length > WINDOW_TEXT_MAX) {
+                length = WINDOW_TEXT_MAX;
+            }
+            for (int i = 0; i < length; ++i) {
+                line[i] = window->text[i];
+            }
+            line[length] = '\0';
+
+            const rect_t body_content = rect_make(content_rect.x, content_rect.y + 28,
+                content_rect.width, content_rect.height - 28);
+            fb_draw_string_clipped(fb, window->x + 8, window->y + 56, line, body_fg, body_bg, body_content);
+        }
+
+        return;
+    }
 
     if (window->text_length > 0) {
         char line[WINDOW_TEXT_MAX + 1];
@@ -998,6 +1276,20 @@ static void window_draw(int fb, const window_t *window) {
             int caret_y;
             window_text_cursor_xy(window, window->text_cursor, &caret_x, &caret_y);
             fb_fill_rect(fb, caret_x, caret_y + FONT_HEIGHT - 2, FONT_WIDTH, 2, 0x00FFD34D);
+        }
+    }
+
+    if (window->role == WINDOW_ROLE_TERMINAL) {
+        const rect_t input_rect = rect_make(window->x + 8, window->y + window->height - 32,
+            window->width - 16, 24);
+        fb_draw_string(fb, input_rect.x, input_rect.y, "term> ", body_fg, body_bg);
+        fb_draw_string(fb, input_rect.x + 6 * FONT_WIDTH, input_rect.y, window->terminal_input,
+            body_fg, body_bg);
+
+        if (window->focused) {
+            const int cursor_x = input_rect.x + 6 * FONT_WIDTH + window->terminal_input_length * FONT_WIDTH;
+            const int cursor_y = input_rect.y + FONT_HEIGHT - 2;
+            fb_fill_rect(fb, cursor_x, cursor_y, FONT_WIDTH, 2, 0x00FFD34D);
         }
     }
 }
@@ -1044,8 +1336,11 @@ static int start_menu_item_at(const user_fb_info_t *info, int x, int y) {
 static const char *start_menu_item_text(int index) {
     switch (index) {
         case 0: return "Toggle Files";
-        case 1: return "Clear Text";
-        case 2: return "Help";
+        case 1: return "Toggle System";
+        case 2: return "Clear Text";
+        case 3: return "Help";
+        case 4: return "Toggle Terminal";
+        case 5: return "Toggle Browser";
         default: return "";
     }
 }
@@ -1234,6 +1529,10 @@ static void redraw(
     draw_cursor(fb, cursor_x, cursor_y);
 }
 
+// Static allocations to avoid large stack usage
+static window_t g_windows[WINDOW_MAX];
+static file_explorer_t g_files;
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -1255,7 +1554,7 @@ int main(int argc, char **argv) {
 
     int mouse_fd = sys_open("/dev/mouse0");
 
-    window_t windows[WINDOW_MAX];
+    window_t *windows = g_windows;
     for (int i = 0; i < WINDOW_MAX; ++i) {
         windows[i].text_length = 0;
         windows[i].text_cursor = 0;
@@ -1295,10 +1594,50 @@ int main(int argc, char **argv) {
     windows[2].visible = true;
     windows[2].role = WINDOW_ROLE_FILES;
 
-    file_explorer_t files;
-    str_copy_limit(files.cwd, (int)sizeof(files.cwd), "/");
-    files.entry_count = 0;
-    files_refresh(&files, &windows[2]);
+    file_explorer_t *files = &g_files;
+    str_copy_limit(files->cwd, (int)sizeof(files->cwd), "/");
+    files->entry_count = 0;
+    files_refresh(files, &windows[2]);
+
+    windows[3].x = 100;
+    windows[3].y = 100;
+    windows[3].width = 800;
+    windows[3].height = 500;
+    windows[3].title = "System";
+    windows[3].visible = true;
+    windows[3].role = WINDOW_ROLE_SYSTEM;
+    window_set_text(&windows[3],
+        "System Panel:\n"
+        "- BucketOS lightweight UI shell\n"
+        "- Files, Viewer, Notepad, and system status\n"
+        "- Designed to stay small and responsive\n"
+        "- Browser window is available through the start menu\n\n"
+        "Use the start menu to toggle windows and view help.");
+
+    windows[4].x = 520;
+    windows[4].y = 330;
+    windows[4].width = 440;
+    windows[4].height = 260;
+    windows[4].title = "Browser";
+    windows[4].visible = false;
+    windows[4].role = WINDOW_ROLE_BROWSER;
+    browser_set_url("http://bucketos.local/");
+    window_set_text(&windows[4],
+        "Browser window ready.\n"
+        "Edit the URL bar and press Enter or click Go.");
+
+    windows[5].x = 80;
+    windows[5].y = 90;
+    windows[5].width = 760;
+    windows[5].height = 340;
+    windows[5].title = "Terminal";
+    windows[5].visible = false;
+    windows[5].role = WINDOW_ROLE_TERMINAL;
+    windows[5].terminal_input_length = 0;
+    windows[5].terminal_input[0] = '\0';
+    window_set_text(&windows[5],
+        "Terminal ready.\n"
+        "Type 'help' for commands, or 'bpkg help' for package manager usage.\n");
 
     int focused = 0;
     int cursor_x = 20;
@@ -1393,6 +1732,14 @@ int main(int argc, char **argv) {
                                     }
                                     dirty_add(&dirty, files_rect, &info);
                                 } else if (item == 1) {
+                                    const rect_t system_rect = rect_make(
+                                        windows[3].x, windows[3].y, windows[3].width, windows[3].height);
+                                    windows[3].visible = !windows[3].visible;
+                                    if (!windows[3].visible && focused == 3) {
+                                        focused = first_visible_window(windows);
+                                    }
+                                    dirty_add(&dirty, system_rect, &info);
+                                } else if (item == 2) {
                                     if (focused >= 0 && focused < WINDOW_MAX
                                         && (windows[focused].role == WINDOW_ROLE_GENERIC
                                             || windows[focused].role == WINDOW_ROLE_NOTEPAD)) {
@@ -1402,17 +1749,40 @@ int main(int argc, char **argv) {
                                         windows[focused].text[0] = '\0';
                                         dirty_add(&dirty, window_content_rect(&windows[focused]), &info);
                                     }
-                                } else if (item == 2) {
+                                } else if (item == 3) {
                                     window_set_text(&windows[1],
                                         "Help:\n"
                                         "- Left click title bar to drag.\n"
                                         "- Start button toggles the menu.\n"
                                         "- Files lists the VFS tree.\n"
                                         "- Notepad is editable.\n"
-                                        "- ESC exits the WM.");
+                                        "- System panel shows OS status.\n"
+                                        "- Terminal accepts the same shell commands.\n"
+                                        "- ESC exits the WM.\n"
+                                        "- Use Browser to load HTTP pages.");
                                     windows[1].visible = true;
                                     focused = 1;
                                     dirty_add(&dirty, rect_make(windows[1].x, windows[1].y, windows[1].width, windows[1].height), &info);
+                                } else if (item == 4) {
+                                    const rect_t terminal_rect = rect_make(
+                                        windows[5].x, windows[5].y, windows[5].width, windows[5].height);
+                                    windows[5].visible = !windows[5].visible;
+                                    if (!windows[5].visible && focused == 5) {
+                                        focused = first_visible_window(windows);
+                                    } else if (windows[5].visible) {
+                                        focused = 5;
+                                    }
+                                    dirty_add(&dirty, terminal_rect, &info);
+                                } else if (item == 5) {
+                                    const rect_t browser_rect = rect_make(
+                                        windows[4].x, windows[4].y, windows[4].width, windows[4].height);
+                                    windows[4].visible = !windows[4].visible;
+                                    if (!windows[4].visible && focused == 4) {
+                                        focused = first_visible_window(windows);
+                                    } else if (windows[4].visible) {
+                                        focused = 4;
+                                    }
+                                    dirty_add(&dirty, browser_rect, &info);
                                 }
 
                                 start_menu_open = 0;
@@ -1448,11 +1818,23 @@ int main(int argc, char **argv) {
                                 const int prev_focus = focused;
                                 focused = clicked;
                                 if (prev_focus >= 0 && prev_focus < WINDOW_MAX && windows[prev_focus].visible) {
-                                    dirty_add(&dirty, rect_make(windows[prev_focus].x, windows[prev_focus].y,
-                                        windows[prev_focus].width, windows[prev_focus].height), &info);
+                                    // Only redraw title bar and border of previously focused window
+                                    const rect_t title = window_titlebar_rect(&windows[prev_focus]);
+                                    const rect_t border = rect_make(windows[prev_focus].x, windows[prev_focus].y,
+                                        windows[prev_focus].width, 1);
+                                    const rect_t close_btn = window_close_button_rect(&windows[prev_focus]);
+                                    dirty_add(&dirty, title, &info);
+                                    dirty_add(&dirty, border, &info);
+                                    dirty_add(&dirty, close_btn, &info);
                                 }
-                                dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y,
-                                    windows[focused].width, windows[focused].height), &info);
+                                // Only redraw title bar and border of newly focused window
+                                const rect_t title = window_titlebar_rect(&windows[focused]);
+                                const rect_t border = rect_make(windows[focused].x, windows[focused].y,
+                                    windows[focused].width, 1);
+                                const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                                dirty_add(&dirty, title, &info);
+                                dirty_add(&dirty, border, &info);
+                                dirty_add(&dirty, close_btn, &info);
                                 dirty_add(&dirty, taskbar_rect(&info), &info);
                             }
 
@@ -1472,15 +1854,26 @@ int main(int argc, char **argv) {
                                 dirty_add(&dirty, closed_rect, &info);
                                 dirty_add(&dirty, taskbar_rect(&info), &info);
                             } else if (rect_contains_point(title_rect, cursor_x, cursor_y)) {
+                                // Focus the window when clicking title bar (like MenuetOS)
+                                if (focused != clicked) {
+                                    focused = clicked;
+                                    dirty_add(&dirty, taskbar_rect(&info), &info);
+                                }
                                 dragging = 1;
                                 drag_window = clicked;
                                 drag_offset_x = cursor_x - windows[clicked].x;
                                 drag_offset_y = cursor_y - windows[clicked].y;
                             } else if (windows[clicked].role == WINDOW_ROLE_FILES) {
-                                if (files_handle_click(&files, &windows[clicked], &windows[1], cursor_x, cursor_y)) {
+                                if (files_handle_click(files, &windows[clicked], &windows[1], cursor_x, cursor_y)) {
                                     dirty_add(&dirty, window_body_rect(&windows[clicked]), &info);
                                     dirty_add(&dirty, window_body_rect(&windows[1]), &info);
                                 }
+                            } else if (windows[clicked].role == WINDOW_ROLE_BROWSER
+                                && rect_contains_point(window_browser_go_button_rect(&windows[clicked]), cursor_x, cursor_y)) {
+                                browser_load_url(&windows[clicked], 0);
+                                dirty_add(&dirty, window_body_rect(&windows[clicked]), &info);
+                                dirty_add(&dirty, window_browser_url_rect(&windows[clicked]), &info);
+                                dirty_add(&dirty, window_browser_go_button_rect(&windows[clicked]), &info);
                             } else if (windows[clicked].role == WINDOW_ROLE_GENERIC
                                 && rect_contains_point(widget_rect, cursor_x, cursor_y)) {
                                 const rect_t old_label =
@@ -1537,10 +1930,20 @@ int main(int argc, char **argv) {
                     const int prev = focused;
                     focused = 0;
                     if (prev != focused) {
-                        if (prev >= 0 && prev < WINDOW_MAX) {
-                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        if (prev >= 0 && prev < WINDOW_MAX && windows[prev].visible) {
+                            const rect_t title = window_titlebar_rect(&windows[prev]);
+                            const rect_t border = rect_make(windows[prev].x, windows[prev].y, windows[prev].width, 1);
+                            const rect_t close_btn = window_close_button_rect(&windows[prev]);
+                            dirty_add(&dirty, title, &info);
+                            dirty_add(&dirty, border, &info);
+                            dirty_add(&dirty, close_btn, &info);
                         }
-                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        const rect_t title = window_titlebar_rect(&windows[focused]);
+                        const rect_t border = rect_make(windows[focused].x, windows[focused].y, windows[focused].width, 1);
+                        const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                        dirty_add(&dirty, title, &info);
+                        dirty_add(&dirty, border, &info);
+                        dirty_add(&dirty, close_btn, &info);
                         dirty_add(&dirty, taskbar_rect(&info), &info);
                     }
                 }
@@ -1549,10 +1952,20 @@ int main(int argc, char **argv) {
                     const int prev = focused;
                     focused = 1;
                     if (prev != focused) {
-                        if (prev >= 0 && prev < WINDOW_MAX) {
-                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        if (prev >= 0 && prev < WINDOW_MAX && windows[prev].visible) {
+                            const rect_t title = window_titlebar_rect(&windows[prev]);
+                            const rect_t border = rect_make(windows[prev].x, windows[prev].y, windows[prev].width, 1);
+                            const rect_t close_btn = window_close_button_rect(&windows[prev]);
+                            dirty_add(&dirty, title, &info);
+                            dirty_add(&dirty, border, &info);
+                            dirty_add(&dirty, close_btn, &info);
                         }
-                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        const rect_t title = window_titlebar_rect(&windows[focused]);
+                        const rect_t border = rect_make(windows[focused].x, windows[focused].y, windows[focused].width, 1);
+                        const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                        dirty_add(&dirty, title, &info);
+                        dirty_add(&dirty, border, &info);
+                        dirty_add(&dirty, close_btn, &info);
                         dirty_add(&dirty, taskbar_rect(&info), &info);
                     }
                 }
@@ -1561,68 +1974,143 @@ int main(int argc, char **argv) {
                     const int prev = focused;
                     focused = 2;
                     if (prev != focused) {
-                        if (prev >= 0 && prev < WINDOW_MAX) {
-                            dirty_add(&dirty, rect_make(windows[prev].x, windows[prev].y, windows[prev].width, windows[prev].height), &info);
+                        if (prev >= 0 && prev < WINDOW_MAX && windows[prev].visible) {
+                            const rect_t title = window_titlebar_rect(&windows[prev]);
+                            const rect_t border = rect_make(windows[prev].x, windows[prev].y, windows[prev].width, 1);
+                            const rect_t close_btn = window_close_button_rect(&windows[prev]);
+                            dirty_add(&dirty, title, &info);
+                            dirty_add(&dirty, border, &info);
+                            dirty_add(&dirty, close_btn, &info);
                         }
-                        dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y, windows[focused].width, windows[focused].height), &info);
+                        const rect_t title = window_titlebar_rect(&windows[focused]);
+                        const rect_t border = rect_make(windows[focused].x, windows[focused].y, windows[focused].width, 1);
+                        const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                        dirty_add(&dirty, title, &info);
+                        dirty_add(&dirty, border, &info);
+                        dirty_add(&dirty, close_btn, &info);
+                        dirty_add(&dirty, taskbar_rect(&info), &info);
+                    }
+                }
+            } else if (c == '4') {
+                if (windows[3].visible) {
+                    const int prev = focused;
+                    focused = 3;
+                    if (prev != focused) {
+                        if (prev >= 0 && prev < WINDOW_MAX && windows[prev].visible) {
+                            const rect_t title = window_titlebar_rect(&windows[prev]);
+                            const rect_t border = rect_make(windows[prev].x, windows[prev].y, windows[prev].width, 1);
+                            const rect_t close_btn = window_close_button_rect(&windows[prev]);
+                            dirty_add(&dirty, title, &info);
+                            dirty_add(&dirty, border, &info);
+                            dirty_add(&dirty, close_btn, &info);
+                        }
+                        const rect_t title = window_titlebar_rect(&windows[focused]);
+                        const rect_t border = rect_make(windows[focused].x, windows[focused].y, windows[focused].width, 1);
+                        const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                        dirty_add(&dirty, title, &info);
+                        dirty_add(&dirty, border, &info);
+                        dirty_add(&dirty, close_btn, &info);
                         dirty_add(&dirty, taskbar_rect(&info), &info);
                     }
                 }
             } else if (c == '\b') {
-                if (focused >= 0 && focused < WINDOW_MAX
-                    && (windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD)
-                    && windows[focused].text_cursor > 0) {
-                    const int old_cursor = windows[focused].text_cursor;
-                    windows[focused].text_cursor--;
-                    if (windows[focused].text_length > windows[focused].text_cursor) {
-                        windows[focused].text_length = windows[focused].text_cursor;
-                    }
-                    windows[focused].text[windows[focused].text_length] = '\0';
+                if (focused >= 0 && focused < WINDOW_MAX) {
+                    if (windows[focused].role == WINDOW_ROLE_BROWSER) {
+                        if (g_browser_url_length > 0) {
+                            g_browser_url[--g_browser_url_length] = '\0';
+                            dirty_add(&dirty, window_browser_url_rect(&windows[focused]), &info);
+                        }
+                    } else if (windows[focused].role == WINDOW_ROLE_TERMINAL) {
+                        if (windows[focused].terminal_input_length > 0) {
+                            windows[focused].terminal_input[--windows[focused].terminal_input_length] = '\0';
+                            dirty_add(&dirty, rect_make(windows[focused].x + 8 + 6 * FONT_WIDTH,
+                                windows[focused].y + windows[focused].height - 32,
+                                FONT_WIDTH * (windows[focused].terminal_input_length + 1), FONT_HEIGHT), &info);
+                        }
+                    } else if ((windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD || windows[focused].role == WINDOW_ROLE_SYSTEM)
+                        && windows[focused].text_cursor > 0) {
+                        const int old_cursor = windows[focused].text_cursor;
+                        windows[focused].text_cursor--;
+                        if (windows[focused].text_length > windows[focused].text_cursor) {
+                            windows[focused].text_length = windows[focused].text_cursor;
+                        }
+                        windows[focused].text[windows[focused].text_length] = '\0';
 
-                    int old_x;
-                    int old_y;
-                    int new_x;
-                    int new_y;
-                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
-                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
-                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
-                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        int old_x;
+                        int old_y;
+                        int new_x;
+                        int new_y;
+                        window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                        window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                        dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    }
                 }
             } else if (c == '\n') {
-                if (focused >= 0 && focused < WINDOW_MAX
-                    && windows[focused].role == WINDOW_ROLE_NOTEPAD
-                    && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
-                    const int old_cursor = windows[focused].text_cursor;
-                    windows[focused].text[windows[focused].text_cursor++] = '\n';
-                    windows[focused].text_length = windows[focused].text_cursor;
-                    windows[focused].text[windows[focused].text_length] = '\0';
+                if (focused >= 0 && focused < WINDOW_MAX) {
+                    if (windows[focused].role == WINDOW_ROLE_BROWSER) {
+                        browser_load_url(&windows[focused], 0);
+                        dirty_add(&dirty, window_body_rect(&windows[focused]), &info);
+                        dirty_add(&dirty, window_browser_url_rect(&windows[focused]), &info);
+                        dirty_add(&dirty, window_browser_go_button_rect(&windows[focused]), &info);
+                    } else if (windows[focused].role == WINDOW_ROLE_TERMINAL) {
+                        terminal_execute_command(&windows[focused], windows[focused].terminal_input);
+                        windows[focused].terminal_input_length = 0;
+                        windows[focused].terminal_input[0] = '\0';
+                        dirty_add(&dirty, window_body_rect(&windows[focused]), &info);
+                        dirty_add(&dirty, rect_make(windows[focused].x + 8, windows[focused].y + windows[focused].height - 32,
+                            windows[focused].width - 16, 24), &info);
+                    } else if (windows[focused].role == WINDOW_ROLE_SYSTEM) {
+                        // No Enter action needed for the system panel.
+                    } else if (windows[focused].role == WINDOW_ROLE_NOTEPAD
+                        && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
+                        const int old_cursor = windows[focused].text_cursor;
+                        windows[focused].text[windows[focused].text_cursor++] = '\n';
+                        windows[focused].text_length = windows[focused].text_cursor;
+                        windows[focused].text[windows[focused].text_length] = '\0';
 
-                    int old_x;
-                    int old_y;
-                    int new_x;
-                    int new_y;
-                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
-                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
-                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
-                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        int old_x;
+                        int old_y;
+                        int new_x;
+                        int new_y;
+                        window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                        window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                        dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    }
                 }
             } else if (c >= 32 && c <= 126) {
-                if (focused >= 0 && focused < WINDOW_MAX
-                    && (windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD)
-                    && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
-                    const int old_cursor = windows[focused].text_cursor;
-                    windows[focused].text[windows[focused].text_cursor++] = c;
-                    windows[focused].text_length = windows[focused].text_cursor;
-                    windows[focused].text[windows[focused].text_length] = '\0';
+                if (focused >= 0 && focused < WINDOW_MAX) {
+                    if (windows[focused].role == WINDOW_ROLE_BROWSER) {
+                        if (g_browser_url_length + 1 < (int)sizeof(g_browser_url)) {
+                            const char input[2] = { c, '\0' };
+                            g_browser_url_length = text_append(g_browser_url, (int)sizeof(g_browser_url), g_browser_url_length, input);
+                            dirty_add(&dirty, window_browser_url_rect(&windows[focused]), &info);
+                        }
+                    } else if (windows[focused].role == WINDOW_ROLE_TERMINAL) {
+                        if (windows[focused].terminal_input_length + 1 < (int)sizeof(windows[focused].terminal_input)) {
+                            windows[focused].terminal_input[windows[focused].terminal_input_length++] = c;
+                            windows[focused].terminal_input[windows[focused].terminal_input_length] = '\0';
+                            dirty_add(&dirty, rect_make(windows[focused].x + 8 + 6 * FONT_WIDTH,
+                                windows[focused].y + windows[focused].height - 32,
+                                FONT_WIDTH * (windows[focused].terminal_input_length + 1), FONT_HEIGHT), &info);
+                        }
+                    } else if ((windows[focused].role == WINDOW_ROLE_GENERIC || windows[focused].role == WINDOW_ROLE_NOTEPAD || windows[focused].role == WINDOW_ROLE_SYSTEM)
+                        && windows[focused].text_cursor + 1 < WINDOW_TEXT_MAX) {
+                        const int old_cursor = windows[focused].text_cursor;
+                        windows[focused].text[windows[focused].text_cursor++] = c;
+                        windows[focused].text_length = windows[focused].text_cursor;
+                        windows[focused].text[windows[focused].text_length] = '\0';
 
-                    int old_x;
-                    int old_y;
-                    int new_x;
-                    int new_y;
-                    window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
-                    window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
-                    dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
-                    dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        int old_x;
+                        int old_y;
+                        int new_x;
+                        int new_y;
+                        window_text_cursor_xy(&windows[focused], old_cursor, &old_x, &old_y);
+                        window_text_cursor_xy(&windows[focused], windows[focused].text_cursor, &new_x, &new_y);
+                        dirty_add(&dirty, rect_make(old_x, old_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                        dirty_add(&dirty, rect_make(new_x, new_y, FONT_WIDTH, FONT_HEIGHT), &info);
+                    }
                 }
             }
         }
@@ -1632,13 +2120,21 @@ int main(int argc, char **argv) {
         }
 
         if (old_focused != focused) {
-            if (old_focused >= 0 && old_focused < WINDOW_MAX) {
-                dirty_add(&dirty, rect_make(windows[old_focused].x, windows[old_focused].y,
-                    windows[old_focused].width, windows[old_focused].height), &info);
+            if (old_focused >= 0 && old_focused < WINDOW_MAX && windows[old_focused].visible) {
+                const rect_t title = window_titlebar_rect(&windows[old_focused]);
+                const rect_t border = rect_make(windows[old_focused].x, windows[old_focused].y, windows[old_focused].width, 1);
+                const rect_t close_btn = window_close_button_rect(&windows[old_focused]);
+                dirty_add(&dirty, title, &info);
+                dirty_add(&dirty, border, &info);
+                dirty_add(&dirty, close_btn, &info);
             }
-            if (focused >= 0 && focused < WINDOW_MAX) {
-                dirty_add(&dirty, rect_make(windows[focused].x, windows[focused].y,
-                    windows[focused].width, windows[focused].height), &info);
+            if (focused >= 0 && focused < WINDOW_MAX && windows[focused].visible) {
+                const rect_t title = window_titlebar_rect(&windows[focused]);
+                const rect_t border = rect_make(windows[focused].x, windows[focused].y, windows[focused].width, 1);
+                const rect_t close_btn = window_close_button_rect(&windows[focused]);
+                dirty_add(&dirty, title, &info);
+                dirty_add(&dirty, border, &info);
+                dirty_add(&dirty, close_btn, &info);
             }
             dirty_add(&dirty, taskbar_rect(&info), &info);
         }
