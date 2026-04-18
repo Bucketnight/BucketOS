@@ -9,7 +9,7 @@ GRUB_MKRESCUE ?= grub2-mkrescue
 QEMU ?= qemu-system-x86_64
 Q := @
 
-CFLAGS := -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -Werror -O2 -Iinclude
+CFLAGS := -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -Werror -Wno-unused-function -O2 -Iinclude
 ASFLAGS := -m32 -ffreestanding
 LDFLAGS := -m32 -T linker.ld -nostdlib -no-pie
 
@@ -23,8 +23,6 @@ INITRD := $(BUILD_DIR)/initrd.tar
 USERTEST_ELF := $(BUILD_DIR)/usertest.elf
 USERTEST_BIN := $(BUILD_DIR)/usertest.bin
 GENERATED_CONFIG := include/bucketos/config.h
-WALLPAPER_SRC := logo.png
-WALLPAPER_RAW := $(INITRD_ROOT)/usr/share/wallpaper.bgra
 
 SOURCES_C := \
 	src/kernel/kernel.c \
@@ -54,6 +52,10 @@ SOURCES_C := \
 	src/kernel/memory.c \
 	src/kernel/panic.c \
 	src/kernel/shell.c \
+	src/kernel/network.c \
+	src/kernel/ip.c \
+	src/kernel/tcp.c \
+	src/kernel/http.c \
 
 
 SOURCES_S := \
@@ -66,9 +68,7 @@ USER_SOURCES_S := \
 
 USER_SOURCES_C := \
 	src/user/lib.c \
-	src/user/fbtest.c \
-	src/user/sh.c \
-	src/user/wm.c
+	src/user/sh.c
 
 OBJECTS := \
 	$(patsubst src/%.c,$(OBJ_DIR)/%.o,$(SOURCES_C)) \
@@ -78,18 +78,14 @@ USER_OBJECTS := \
 	$(patsubst src/%.s,$(OBJ_DIR)/%.o,$(USER_SOURCES_S)) \
 	$(patsubst src/%.c,$(OBJ_DIR)/%.o,$(USER_SOURCES_C))
 
-USER_CFLAGS := -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -Werror -O2 -Iinclude -Iuser/include
+USER_CFLAGS := -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -Werror -Wno-unused-function -O2 -Iinclude -Iuser/include
 
 USERCRT_OBJECT := $(OBJ_DIR)/user/crt0.o
 USERLIB_OBJECT := $(OBJ_DIR)/user/lib.o
 USERTEST_OBJECT := $(OBJ_DIR)/user/usertest.o
-USERFBTEST_OBJECT := $(OBJ_DIR)/user/fbtest.o
 USERSH_OBJECT := $(OBJ_DIR)/user/sh.o
-USERWM_OBJECT := $(OBJ_DIR)/user/wm.o
-
+USERBPKG_OBJECT := $(OBJ_DIR)/user/bpkg.o
 USERSH_ELF := $(BUILD_DIR)/sh.elf
-USERFBTEST_ELF := $(BUILD_DIR)/fbtest.elf
-USERWM_ELF := $(BUILD_DIR)/wm.elf
 
 .PHONY: all kernel iso run run-serial clean defconfig config
 
@@ -148,17 +144,9 @@ $(USERTEST_ELF): $(USER_OBJECTS) user.ld | $(BUILD_DIR)
 	$(Q)printf "LD     %s\n" "$@"
 	$(Q)$(HOST_LD) -m elf_i386 -T user.ld -nostdlib -o $@ $(USERTEST_OBJECT)
 
-$(USERSH_ELF): $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERSH_OBJECT) user.ld | $(BUILD_DIR)
+$(USERSH_ELF): $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERSH_OBJECT) $(USERBPKG_OBJECT) user.ld | $(BUILD_DIR)
 	$(Q)printf "LD     %s\n" "$@"
-	$(Q)$(HOST_LD) -m elf_i386 -T user.ld -nostdlib -o $@ $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERSH_OBJECT)
-
-$(USERFBTEST_ELF): $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERFBTEST_OBJECT) user.ld | $(BUILD_DIR)
-	$(Q)printf "LD     %s\n" "$@"
-	$(Q)$(HOST_LD) -m elf_i386 -T user.ld -nostdlib -o $@ $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERFBTEST_OBJECT)
-
-$(USERWM_ELF): $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERWM_OBJECT) user.ld | $(BUILD_DIR)
-	$(Q)printf "LD     %s\n" "$@"
-	$(Q)$(HOST_LD) -m elf_i386 -T user.ld -nostdlib -o $@ $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERWM_OBJECT)
+	$(Q)$(HOST_LD) -m elf_i386 -T user.ld -nostdlib -o $@ $(USERCRT_OBJECT) $(USERLIB_OBJECT) $(USERSH_OBJECT) $(USERBPKG_OBJECT)
 
 $(USERTEST_BIN): $(USERTEST_ELF)
 	$(Q)printf "BIN    %s\n" "$@"
@@ -177,17 +165,13 @@ $(GENERATED_CONFIG): $(CONFIG_FILE) scripts/genconfig.sh
 	$(Q)printf "CONF   %s\n" "$@"
 	$(Q)$(GENCONFIG) $(CONFIG_FILE) $@
 
-$(INITRD): $(USERTEST_BIN) $(USERSH_ELF) $(USERFBTEST_ELF) $(USERWM_ELF) | $(BUILD_DIR) $(INITRD_ROOT)
+$(INITRD): $(USERTEST_BIN) $(USERSH_ELF) | $(BUILD_DIR) $(INITRD_ROOT)
 	$(Q)printf "TAR    %s\n" "$@"
 	$(Q)rm -rf $(INITRD_ROOT)
 	$(Q)mkdir -p $(INITRD_ROOT)
 	$(Q)cp -R initrd/. $(INITRD_ROOT)/
+	$(Q)cp -R packages $(INITRD_ROOT)/
 	$(Q)mkdir -p $(INITRD_ROOT)/bin
-	$(Q)mkdir -p $(INITRD_ROOT)/usr/share
 	$(Q)cp $(USERTEST_ELF) $(INITRD_ROOT)/bin/usertest.elf
 	$(Q)cp $(USERSH_ELF) $(INITRD_ROOT)/bin/sh.elf
-	$(Q)cp $(USERFBTEST_ELF) $(INITRD_ROOT)/bin/fbtest.elf
-	$(Q)cp $(USERWM_ELF) $(INITRD_ROOT)/bin/wm.elf
-	$(Q)printf "WALL   %s\n" "$(WALLPAPER_RAW)"
-	$(Q)magick $(WALLPAPER_SRC) -alpha on -depth 8 BGRA:$(WALLPAPER_RAW)
 	$(Q)tar --format=ustar -cf $@ -C $(INITRD_ROOT) .
